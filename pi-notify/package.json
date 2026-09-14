@@ -1,0 +1,38 @@
+{
+  "name": "@xyzensun/pi-notify",
+  "version": "3.0.0",
+  "type": "module",
+  "description": "ntfy push notification extension for pi — three-layer control (global/session/mute), works anywhere (local, VM, headless server)",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "notification",
+    "ntfy",
+    "push-notification"
+  ],
+  "author": "xyzensun",
+  "contributors": [
+    "ryanchan720"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ryanchan720/pi-desktop-notify.git"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  },
+  "files": [
+    "extensions/desktop-notify.ts",
+    "README.md",
+    "README.zh.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "typescript": "^7.0.2"
+  }
+}
