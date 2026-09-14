@@ -53,7 +53,7 @@ pi 的手动上下文管理插件。两个互补操作, 把上下文的管理权
 pi -e ./pi-mctx/index.ts
 ```
 
-调试日志 (debug 版): `<tmpdir>/pi-mctx/debug.log`, 记录命令入口 / 候选筛选 / 投影命中 / obs 回读 / LLM 调用全过程。正式版关闭。
+调试日志默认关闭 (`src/debug.ts` 的 `DEBUG_ENABLED` 置回 `true` 可开启, 输出到 `<tmpdir>/pi-mctx/debug.log`, 记录命令入口 / 候选筛选 / 投影命中 / obs 回读 / LLM 调用全过程)。
 
 ## 设计
 

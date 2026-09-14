@@ -11,8 +11,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
 
-// 调试开关: 正式版置为 false。
-export const DEBUG_ENABLED = true;
+// 调试开关: 需要排查问题时置为 true, 发布版本保持 false。
+export const DEBUG_ENABLED = false;
 
 const LOG_DIR = join(tmpdir(), "pi-mctx");
 const LOG_FILE = join(LOG_DIR, "debug.log");

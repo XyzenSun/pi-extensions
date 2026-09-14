@@ -13,6 +13,9 @@
   "author": "xyzensun",
   "license": "MIT",
   "main": "./index.ts",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "files": [
     "index.ts",
     "src/",
