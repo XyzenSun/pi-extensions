@@ -1,0 +1,20 @@
+# 依赖 (npm install 可还原，不入库)
+node_modules/
+
+# 构建产物与测试覆盖率
+dist/
+coverage/
+*.tsbuildinfo
+
+# 环境变量与密钥
+.env
+.env.local
+
+# 日志
+*.log
+
+# 编辑器与系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
