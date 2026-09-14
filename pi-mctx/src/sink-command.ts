@@ -7,9 +7,11 @@ import { dbg } from "./debug.ts";
 import {
   addSunkId,
   clearSunkIds,
+  deleteSunkId,
   getSunkIds,
   rebindSession,
   removeAllSunkFiles,
+  removeSunkFile,
   writeSunkFile,
 } from "./sink-store.ts";
 
@@ -106,9 +108,23 @@ export async function runSinkCommand(
     candidates.map((candidate) => ({ id: candidate.id, tool: candidate.toolName, bytes: candidate.bytes })),
   );
 
-  // --keep 从候选列表尾部保留 N 条 (最近产生的), 其余为下沉目标。
+  // --keep 目标状态语义: 执行后保证「最近 N 条可见, 其余已沉」。
+  // 落在保留尾部的已沉条目需要恢复 (删文件 + 移出集合),
+  // 使「先全沉再 --keep」与重复执行都能得到正确且幂等的结果。
   const keepCount = Math.min(parsed.keep ?? 0, candidates.length);
   const targets = candidates.slice(0, candidates.length - keepCount);
+
+  let restored = 0;
+  if (keepCount > 0) {
+    const keptTail = candidates.slice(candidates.length - keepCount);
+    for (const kept of keptTail) {
+      if (!sunkIds.has(kept.id)) continue;
+      // 以集合成员关系为准制恢复决定: 即使文件已被外部删除, 也同步修正集合。
+      removeSunkFile(sessionId, kept.id);
+      deleteSunkId(kept.id);
+      restored++;
+    }
+  }
 
   let written = 0;
   let alreadySunk = 0;
@@ -124,11 +140,17 @@ export async function runSinkCommand(
     }
   }
 
-  dbg("sink", "下沉完成", { candidates: candidates.length, keep: keepCount, written, alreadySunk });
-  ctx.ui.notify(
-    `mctx sink: 新下沉 ${written} 条 (候选 ${candidates.length}, 保留最近 ${keepCount}` +
-      (alreadySunk > 0 ? `, 已沉跳过 ${alreadySunk}` : "") +
-      ")",
-    "info",
-  );
+  dbg("sink", "下沉完成", {
+    candidates: candidates.length,
+    keep: keepCount,
+    written,
+    alreadySunk,
+    restored,
+  });
+  // 未指定 --keep 时不显示"保留最近 0", 避免噪音。
+  const reportParts = [`新下沉 ${written} 条 (候选 ${candidates.length}`];
+  if (keepCount > 0) reportParts.push(`保留最近 ${keepCount}`);
+  if (alreadySunk > 0) reportParts.push(`已沉跳过 ${alreadySunk}`);
+  if (restored > 0) reportParts.push(`恢复可见 ${restored} 条`);
+  ctx.ui.notify(`mctx sink: ${reportParts.join(", ")})`, "info");
 }

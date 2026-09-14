@@ -91,6 +91,24 @@ export function removeAllSunkFiles(sessionId: string): number {
   return removed;
 }
 
+/**
+ * 删除单条下沉文件 (恢复该条为可见)。文件不存在时静默返回 false。
+ * 供 --keep 目标状态语义使用: 调用方以集合成员关系为准制恢复决定,
+ * 即使文件已被外部删除, 也应同步调用 deleteSunkId 修正集合与目录的漂移。
+ */
+export function removeSunkFile(sessionId: string, id: string): boolean {
+  if (!isSafeId(id)) return false;
+  try {
+    rmSync(sinkFile(sessionId, id));
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      dbg("sink-store", "删除下沉文件失败", { id, error: String(error) });
+    }
+    return false;
+  }
+}
+
 /** 读回一条已沉结果, ENOENT 等错误原样抛出由调用方处理。 */
 export function readSunkFile(sessionId: string, id: string): string {
   return readFileSync(sinkFile(sessionId, id), "utf8");
@@ -119,6 +137,10 @@ export function getSunkIds(): ReadonlySet<string> {
 
 export function addSunkId(id: string): void {
   currentSunkIds.add(id);
+}
+
+export function deleteSunkId(id: string): void {
+  currentSunkIds.delete(id);
 }
 
 export function clearSunkIds(): void {

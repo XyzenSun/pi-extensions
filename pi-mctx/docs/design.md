@@ -25,7 +25,7 @@ pi-mctx 是一个**纯手动**的上下文管理工具集, 提供两个互补操
 /mctx                       提示用法 (列出 new / sink 说明, 不执行任何操作)
 /mctx new [可选补充指示]     蒸馏重置: 总结会话 -> 清空上下文 -> 新会话草稿预填
 /mctx sink                  沉掉当前上下文里所有合格的工具结果
-/mctx sink --keep N         保留最近 N 条合格结果, 其余下沉
+/mctx sink --keep N         目标状态: 最近 N 条合格结果可见 (已沉的会被恢复), 其余下沉
 /mctx sink --undo           撤销本会话所有下沉 (删文件 + 清集合)
 ```
 
@@ -124,7 +124,7 @@ pi-mctx 是一个**纯手动**的上下文管理工具集, 提供两个互补操
 1. `ctx.waitForIdle()` 等待 agent 空闲 (保证 buildContextEntries 快照一致)
 2. 取 `ctx.sessionManager.buildContextEntries()` (compaction-aware: 只拿当前还在上下文里的消息, 已被压缩掉的不再处理)
 3. 逐条按 §3.6 判定"合格", 得到候选列表 (保持原始顺序)
-4. `--keep N`: 从候选列表尾部保留 N 条, 其余为下沉目标
+4. `--keep N`: 目标状态语义 —— 执行后保证「最近 N 条候选可见, 其余已沉」。保留尾部的已沉条目删文件 + 移出集合恢复全文, 使「先全沉再 --keep」与重复执行都得到正确且幂等的结果
 5. 对每个目标: 写文件 → Set.add(id) (已存在则幂等跳过)
 6. `ctx.ui.notify` 报告: 下沉条数 / 合格条数 / 保留条数
 
@@ -225,7 +225,7 @@ pi.on("context", (event, ctx) => {
   │     withSession: 编辑器草稿预填生成的 prompt
   │     用户在新会话里审查、编辑, 回车提交才进入上下文
   │
-  └─ ⑥ notify: 压缩前 token 数 + 本次总结调用的 usage/费用
+  └─ ⑥ notify: 压缩前 token 数 + 蒸馏耗时
 ```
 
 ### 4.2 前置检查
@@ -255,6 +255,7 @@ pi 内部有同款逻辑 (`extractFileOpsFromMessage` 等) 但未从包根导出
 - 与 pi 内部 FileOperations 三集合结构对齐: read → 读集, write/edit → 改集 (grep/find/ls 的 path 常为目录或可选, 不提取)
 - 累积合并历史 compaction entry 的 `details` (readFiles/modifiedFiles)
 - 去重, 转为 cwd 相对路径
+- 已知盲区: bash 内的文件操作 (python 读 CSV、cat 等) 对机械提取不可见, 由 §4.8 模板规则允许 LLM 从对话实证补充 (D28)
 
 ### 4.6 LLM 调用
 
@@ -267,7 +268,7 @@ pi 内部有同款逻辑 (`extractFileOpsFromMessage` 等) 但未从包根导出
 
 - `ctx.newSession({ parentSession: 旧会话文件 })`
 - `withSession` 中用 replacement context 的 `ui.setEditorText(prompt)` 预填草稿
-- notify 压缩前 token 数 (`ctx.getContextUsage()`) 与总结调用 usage/费用
+- notify 压缩前 token 数 (`ctx.getContextUsage()`) 与蒸馏耗时 (不统计费用)
 
 ### 4.8 生成模板
 
@@ -291,7 +292,7 @@ system prompt 要点:
 ```
 
 - 约束:
-  - "需要读取的文件"只能从 `<touched-files>` 事实清单中选择, 不得编造路径; 清单为空时省略该段
+  - "需要读取的文件"以 `<touched-files>` 事实清单为主要来源, 允许补充对话中明确出现过的路径 (bash 命令等机械提取盲区), 不得编造清单与对话中都不存在的路径; 两者皆空时省略该段
   - 精简, 目标 1500 字内 (仅指令约束, 不设 maxTokens)
   - 输出语言跟随会话主要语言
   - 只输出 prompt 本身, 无任何前言
@@ -370,7 +371,7 @@ pi-mctx/
 |------|-----------|
 | 从未 /mctx sink | 集合为空, context 钩子零开销 |
 | 重复 /mctx sink | 幂等, 只处理新增合格结果 |
-| --keep N 大于候选数 | 实际下沉 0 条, 正常提示 |
+| --keep N 大于候选数 | 实际下沉 0 条, 全部候选恢复可见, 正常提示 |
 | 结果大小 < minBytes | 不参与下沉 |
 | 结果含图片块 (非纯文本) | 不参与下沉 |
 | obs 自身结果 | 不参与下沉 (防套娃) |
@@ -416,13 +417,15 @@ pi-mctx/
 | D17 | 代码组织 | 拆分模块 (index + src/) | 两子系统 + 共享逻辑, ~650 行; pi-sync 先例 |
 | D18 | sink 也 waitForIdle | 是 | 保证 buildContextEntries 快照一致 |
 | D19 | sink 触发方式 | 手动 /mctx sink | 只有人知道"用完了"; 避免误判 (原 obs-sink 核心决策) |
-| D20 | sink 下沉范围 | 全沉 (可选 --keep) | 断点后未沉的条目纯亏; 批量只断 1 次缓存 |
+| D20 | sink 下沉范围 | 全沉 (可选 --keep, 目标状态语义) | 断点后未沉的条目纯亏; 批量只断 1 次缓存; --keep 保证最近 N 条可见, 已沉的会被恢复 |
 | D21 | sink id | toolCallId | 零计算、稳定、逐条唯一、文件名安全 |
 | D22 | sink 状态载体 | 文件存在性 | 零索引; 丢文件 = 自动回滚 |
 | D23 | sink isError 过滤 | 不过滤 | 失败日志常最大且需要下沉; 可无损读回 |
 | D24 | obs 回读粒度 | 整条 | 分页徒增工具调用, 且下沉物本就在容量内 |
 | D25 | 占位符内容 | id + 读取指引, 不带字节数/摘录 | 工具调用仍在上下文; 字节数是模型无法验证的噪声 |
 | D26 | 占位符稳定性 | 逐字节稳定 | 同一 id 每轮生成完全相同内容, 保护缓存 |
+| D27 | new 完成通知 | token 数 + 耗时, 不含费用 | 用户不需要费用统计; 模型配置的 cost 字段不可靠 (代理/免费配置返回 0) |
+| D28 | 文件清单 bash 盲区 | 清单 + 对话实证 | 机械提取只认 read/write/edit; bash 摸过的文件由 LLM 从对话原文补充, 禁止凭空编造 (实测日志验证 LLM 行为准确) |
 
 ## 10. 调研附录
 
@@ -451,7 +454,7 @@ pi-mctx/
 | 强制保留关键内容 | 压缩指令模板 | new 的"上下文精华"必须含关键决策及理由、技术概念、重要代码片段 |
 | 断路器 | MAX_RETRIES 机制 | 失败即报错, 不自动重试 |
 | 输出预留 | L1 层 | 指令约束 prompt 精简 (按 D7 不设 maxTokens 硬上限) |
-| 可观测性 | 埋点体系 | new 完成后 notify 前后 token 对比 + 总结调用费用; sink 完成后报告条数 |
+| 可观测性 | 埋点体系 | new 完成后 notify 压缩前 token 数与蒸馏耗时; sink 完成后报告条数 |
 | 配对保证 | 工具调用配对 | sink 只改 content 不动配对字段; new 纯文本序列化天然规避 |
 
 排除 (附理由):
@@ -510,7 +513,7 @@ pi-mctx/
 - 占位符稳定性: 连续两次投影, 同一 id 生成的字符串完全相等
 - 回读: obs({id}) 返回与写入内容逐字节相同; 未知 id 报错
 - 幂等: 连续两次 /mctx sink 不重复写、不报错
-- --keep N: 保留最近 N 条, 其余下沉
+- --keep N: 保留最近 N 条, 其余下沉; 先全沉再 --keep N 能正确恢复尾部 N 条 (目标状态幂等)
 - --undo: 文件被删、集合清空、投影恢复全文 (钩子回到快路径)
 - 重启恢复: 模拟进程重启后 readdir 重建集合, 占位符仍生效
 - tmpdir 清理: 删除目录后 readdir 得空集, 全文恢复

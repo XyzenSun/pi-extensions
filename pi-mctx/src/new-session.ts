@@ -31,7 +31,7 @@ Key decisions and their rationale, core technical concepts, and important code s
 What is currently being worked on and where it stands.
 
 ## 需要读取的文件
-One entry per file, each formatted as: "- <path> — <why it must be read> (已修改)" or "(仅读过)". Select files ONLY from the <touched-files> list. Never invent paths. If the list is empty, omit this entire section.
+One entry per file, each formatted as: "- <path> — <why it must be read> (已修改)" or "(仅读过)". List files from the <touched-files> block when present; you may also include file paths that were explicitly referenced in the conversation (for example in bash commands or tool calls). Never invent a path that appears neither in the list nor in the conversation. If there are no such files, omit this entire section.
 
 ## 接下来做什么
 Concrete, actionable next steps.
@@ -114,6 +114,7 @@ export async function runNewCommand(rawArgs: string, ctx: ExtensionCommandContex
   const messages = collectBranchMessages(branch);
   dbg("new", "分支收集完成", { branchEntries: branch.length, messages: messages.length });
   if (messages.length === 0) {
+    dbg("new", "分支无消息, 提前退出");
     ctx.ui.notify("mctx new: 当前会话没有可总结的内容", "warning");
     return;
   }
@@ -145,7 +146,6 @@ export async function runNewCommand(rawArgs: string, ctx: ExtensionCommandContex
   // 生成 kickoff prompt。BorderedLoader 期间 Esc 可中止。
   // generationError 用于区分"用户取消"与"调用失败", 两者都保持当前上下文不变。
   let generationError: string | null = null;
-  let summaryCost: number | undefined;
   const kickoffPrompt = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
     const loader = new BorderedLoader(tui, theme, "mctx: 正在蒸馏上下文...");
     loader.onAbort = () => done(null);
@@ -177,7 +177,6 @@ export async function runNewCommand(rawArgs: string, ctx: ExtensionCommandContex
         generationError = response.errorMessage ?? "LLM 调用失败";
         return null;
       }
-      summaryCost = response.usage?.cost?.total;
       const text = response.content
         .filter((c): c is { type: "text"; text: string } => c.type === "text")
         .map((c) => c.text)
@@ -217,9 +216,7 @@ export async function runNewCommand(rawArgs: string, ctx: ExtensionCommandContex
       replacementCtx.ui.setEditorText(kickoffPrompt);
       const elapsedSeconds = ((Date.now() - startedAt) / 1000).toFixed(1);
       replacementCtx.ui.notify(
-        `mctx: 上下文已清空 (原 ${tokensBefore ?? "?"} tokens, 蒸馏 ${elapsedSeconds}s` +
-          (summaryCost !== undefined ? `, 费用 $${summaryCost.toFixed(4)}` : "") +
-          ")。审查草稿后回车提交",
+        `mctx: 上下文已清空 (原 ${tokensBefore ?? "?"} tokens, 蒸馏 ${elapsedSeconds}s)。审查草稿后回车提交`,
         "info",
       );
     },
