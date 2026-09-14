@@ -1,0 +1,18 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+coverage/
+
+# Environment
+.env
+.env.local
