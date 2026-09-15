@@ -8,7 +8,7 @@ Xyzen 开发并开源的 [pi](https://pi.dev) 扩展插件合集。每个一级�
 |------|------|------|
 | [pi-notify](./pi-notify) | ntfy 推送通知：任务完成、等待输入或出错时推送到手机，结构化消息体，global / session / mute 三层控制，本地、VM、无头服务器均可用 | `pi install npm:@xyzensun/pi-notify` |
 | [pi-sync](./pi-sync) | 通过私有 Git 仓库在多台机器间同步 Pi 配置，基于适配器处理特殊文件，架构说明见其 `docs/design.md` | `pi install npm:@xyzensun/pi-sync` |
-| [pi-mctx](./pi-mctx) | 手动上下文管理：`/mctx new` 蒸馏会话为 kickoff prompt 换新会话；`/mctx sink` 把用完的工具结果移出上下文（无损 obs 读回），设计见其 `docs/design.md`（开发中，未发布） | — |
+| [pi-mctx](./pi-mctx) | 手动上下文管理：`/mctx new` 蒸馏会话为 kickoff prompt 换新会话；`/mctx sink` 把用完的工具结果移出上下文（无损 obs 读回），设计见其 `docs/design.md` | `pi install npm:@xyzensun/pi-mctx` |
 
 ## 开发说明
 
