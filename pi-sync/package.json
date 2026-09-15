@@ -1,6 +1,6 @@
 {
   "name": "@xyzensun/pi-sync",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Sync Pi configuration across machines via a private Git repository, with adapter-based special file handling",
   "license": "MIT",
   "author": {
