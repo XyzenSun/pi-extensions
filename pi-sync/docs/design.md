@@ -127,8 +127,8 @@ Pi 有两种扩展形态，pi-sync 分别处理：
 
 pi-sync 自身永不参与同步：
 - 脚手架默认 exclude `extensions/pi-sync/**`
-- 代码在 include 解析前额外剔除自身安装目录（硬排除，用户配置无法覆盖）
-- 状态目录 `.pi-sync/` 与清单 `pi-sync.json` 在 `sync/` 镜像之外，天然不同步
+- 代码在 include 解析前额外剔除自身安装目录与运行时数据目录 `.pi-sync/`（硬排除，用户配置无法覆盖；`.pi-sync` 的 state 记录自身 hash，被同步会造成永久冲突死循环）
+- 清单 `pi-sync.json` 在 `sync/` 镜像之外，天然不同步
 - 包计划中 `npm:@xyzensun/pi-sync` 排除在 added/changed/removed 之外
 
 ---

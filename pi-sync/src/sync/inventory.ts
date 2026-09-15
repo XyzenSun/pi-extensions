@@ -167,10 +167,6 @@ async function enumerateFiles(
 			const fullPath = join(currentDir, entry.name);
 			const relPath = normalizePath(relative(baseDir, fullPath));
 
-			if (entry.name.startsWith(".") && entry.name !== ".gitignore") {
-				continue;
-			}
-
 			const fileAllowed = isPathAllowed(
 				relPath,
 				config.include,

@@ -53,7 +53,7 @@ npm run pub           # 发布 patch 版本（会先跑 typecheck + test）
 - **基线只在 apply 方向写入**：capture（push）方向绝不碰 `state.json` 的 `files`。push 完成后统一走 apply 收口，这是基线的唯一权威写入路径
 - **无黑名单、无秘密扫描**：任何路径都能被 `include` 同步，安全边界由用户的清单把关。不要重新引入强制拒绝逻辑
 - **包源便携性**：`packages[]` 中只有 `npm:`/`git:`/`https:`/`ssh:` 跨机同步；`file:` 等本机源推送时剥离、拉取时回填，永不触发 `pi install`
-- **插件自排除**：pi-sync 自身目录在 include 解析前被硬剔除，用户配置无法覆盖
+- **插件自排除**：pi-sync 自身安装目录与运行时数据目录 `.pi-sync/` 在 include 解析前被硬剔除，用户配置无法覆盖（`.pi-sync` 的 state 记录自身 hash，被同步会永久冲突死循环）
 
 ## 何时读哪份文档
 

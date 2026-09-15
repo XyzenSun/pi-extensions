@@ -313,18 +313,48 @@ describe.sequential("three-way inventory", () => {
 		});
 	});
 
-	it("does not inventory hidden files and blocks symbolic links", async () => {
+	it("inventories dotfiles when include matches (完全控制, 无隐藏文件黑名单)", async () => {
+		await withTestEnvironment(async (environment) => {
+			await mkdir(
+				join(environment.agentDir, "skills", "pullpage"),
+				{ recursive: true },
+			);
+			await writeFile(
+				join(environment.agentDir, "skills", "pullpage", ".env"),
+				"KEY=1\n",
+				"utf-8",
+			);
+			await writeFile(join(environment.agentDir, ".secret"), "hidden", "utf-8");
+
+			const inventory = await compareFiles(
+				environment.agentDir,
+				environment.repoDir,
+				createPiSyncConfig({ include: ["**"] }),
+				createSyncState({ repoPath: environment.repoDir }),
+			);
+			const paths = inventory.comparisons.map((c) => c.relativePath);
+			expect(paths).toContain(".secret");
+			expect(paths).toContain("skills/pullpage/.env");
+
+			// exclude 优先级高于 include, 点文件同样受 exclude 控制
+			const excluded = await compareFiles(
+				environment.agentDir,
+				environment.repoDir,
+				createPiSyncConfig({ include: ["**"], exclude: [".secret"] }),
+				createSyncState({ repoPath: environment.repoDir }),
+			);
+			const excludedPaths = excluded.comparisons.map((c) => c.relativePath);
+			expect(excludedPaths).not.toContain(".secret");
+			expect(excludedPaths).toContain("skills/pullpage/.env");
+		});
+	});
+
+	it("blocks symbolic links", async () => {
 		await withTestEnvironment(async (environment) => {
 			const outsidePath = join(environment.rootDir, "outside.txt");
 			const linkPath = join(environment.agentDir, "themes", "linked.txt");
 			await mkdir(join(environment.agentDir, "themes"), { recursive: true });
 			await writeFile(outsidePath, "outside", "utf-8");
-			await writeFile(join(environment.agentDir, ".secret"), "hidden", "utf-8");
-			await writeFile(
-				join(environment.agentDir, ".gitignore"),
-				"*.tmp\n",
-				"utf-8",
-			);
 			await symlink(outsidePath, linkPath);
 
 			await expect(

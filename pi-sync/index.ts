@@ -133,6 +133,9 @@ function defaultAgentDir(): string {
 function registerExtensionSelfExclusion(): void {
 	try {
 		const agentDir = defaultAgentDir();
+		// 插件运行时数据目录 (state.json / backups / 锁) 一并自排除：
+		// state 记录自身的 hash, 若被同步会每次同步后变化, 造成永久冲突死循环。
+		registerSelfExclusion(".pi-sync");
 		const extRoot = dirname(fileURLToPath(import.meta.url));
 		if (isAbsolute(agentDir)) {
 			const rel = relative(agentDir, extRoot);

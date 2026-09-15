@@ -193,7 +193,7 @@ async function backupAgentDir(
     };
   }
 
-  // 递归备份 agent 目录（排除 .pi-sync/, npm/, git/, node_modules/）
+  // 递归备份 agent 目录全部内容（仅排除备份自身工作目录，防止备份套备份无限膨胀）
   await recursiveBackup(agentDir, agentDir, dataDir, records);
 }
 
@@ -212,9 +212,8 @@ async function recursiveBackup(
     const fullPath = join(currentDir, entry.name);
     const relPath = relative(baseDir, fullPath).replace(/\\/g, "/");
 
-    // 跳过隐藏文件和不应备份的目录
-    if (entry.name.startsWith(".") && entry.name !== ".gitignore") continue;
-    if (entry.name === "npm" || entry.name === "git" || entry.name === "node_modules") continue;
+    // 跳过备份自身的工作目录：备份套备份会无限膨胀，与用户文件无关
+    if (entry.name === ".pi-sync") continue;
 
     if (entry.isSymbolicLink()) {
       throw new Error(`拒绝备份符号链接：${fullPath}`);

@@ -2846,7 +2846,6 @@ export class PiSyncCommands {
 				const relPath = fullPath
 					.replace(syncRoot + "/", "")
 					.replace(syncRoot, "");
-				if (entry.name.startsWith(".")) continue;
 				if (entry.isSymbolicLink())
 					throw new Error(`拒绝枚举符号链接：${fullPath}`);
 				if (entry.isDirectory()) {
