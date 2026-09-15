@@ -1,0 +1,44 @@
+# pi-sync 手动发布 workflow
+# 触发方式: GitHub Actions 页面手动触发 (workflow_dispatch)
+# 鉴权: 仓库 secret NPM_TOKEN (npm access token, 需在仓库 Settings -> Secrets and variables -> Actions 配置)
+
+name: Publish pi-sync
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: pi-sync/package-lock.json
+
+      - name: Install dependencies
+        working-directory: pi-sync
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: pi-sync
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: pi-sync
+        run: npm run test:core
+
+      - name: Publish to npm
+        working-directory: pi-sync
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
