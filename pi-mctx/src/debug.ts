@@ -2,8 +2,8 @@
  * pi-mctx 调试日志。
  *
  * 输出到 <tmpdir>/pi-mctx/debug.log, 供人工调试排查。
- * 正式发布时把 DEBUG_ENABLED 置为 false, 所有 dbg 调用变为 no-op,
- * 不产生任何 I/O 与字符串构造开销。
+ * 开关: 环境变量 PI_MCTX_DEBUG_ENABLED (设为 1/true/yes 开启, 其余值关闭)。
+ * 关闭时所有 dbg 调用为 no-op, 不产生任何 I/O。
  *
  * 日志失败必须静默: 调试设施绝不能影响插件功能。
  */
@@ -11,14 +11,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
 
-// 调试开关: 需要排查问题时置为 true, 发布版本保持 false。
-export const DEBUG_ENABLED = false;
-
 const LOG_DIR = join(tmpdir(), "pi-mctx");
 const LOG_FILE = join(LOG_DIR, "debug.log");
 
 // 单条日志数据的截断上限, 防止把超长内容 (如完整序列化会话) 无限写进日志。
 const MAX_DATA_LENGTH = 8000;
+
+// 环境变量开关, 模块加载时读取一次。
+// 布尔真值集合: 1/true/yes (大小写不敏感), 其余一律视为关闭。
+const TRUTHY_VALUES = new Set(["1", "true", "yes"]);
+
+export const DEBUG_ENABLED = TRUTHY_VALUES.has(
+  (process.env.PI_MCTX_DEBUG_ENABLED ?? "").trim().toLowerCase(),
+);
 
 function truncateForLog(value: string): string {
   if (value.length <= MAX_DATA_LENGTH) return value;
