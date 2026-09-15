@@ -39,6 +39,9 @@ jobs:
 
       - name: Publish to npm
         working-directory: pi-sync
-        run: npm publish --access public
+        # --ignore-scripts 跳过 prepublishOnly (它会跑含 e2e 的全量测试,
+        # e2e 依赖本地 git 全局配置, CI 环境不可靠且与上方门禁重复);
+        # 门禁由本 workflow 的 typecheck + test:core 承担
+        run: npm publish --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
