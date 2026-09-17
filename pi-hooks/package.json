@@ -1,0 +1,48 @@
+{
+  "name": "@xyzensun/pi-hooks",
+  "version": "0.1.0",
+  "description": "Configuration-driven hook engine for pi — declare hooks in hooks.json, logic lives in bash scripts",
+  "license": "MIT",
+  "author": {
+    "name": "xyzensun"
+  },
+  "type": "module",
+  "main": "./index.ts",
+  "files": [
+    "index.ts",
+    "src/",
+    "lib/",
+    "examples/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "hooks",
+    "pi",
+    "automation",
+    "bash"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx test/config-matcher-protocol.test.ts && tsx test/runner.test.ts"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.85.1",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}
