@@ -1,0 +1,44 @@
+# pi-hooks 手动发布 workflow
+# 触发方式: GitHub Actions 页面手动触发 (workflow_dispatch)
+# 鉴权: 仓库 secret NPM_TOKEN (npm access token, 需在仓库 Settings -> Secrets and variables -> Actions 配置)
+
+name: Publish pi-hooks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: pi-hooks/package-lock.json
+
+      - name: Install dependencies
+        working-directory: pi-hooks
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: pi-hooks
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: pi-hooks
+        run: npm test
+
+      - name: Publish to npm
+        working-directory: pi-hooks
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
