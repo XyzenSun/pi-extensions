@@ -13,6 +13,7 @@ import {
 	type TuiActionId,
 	type TuiState,
 } from "./tui-state.ts";
+import { formatLocalTimestamp } from "./time-format.ts";
 
 /** Pi 主题里本模块用到的那部分。 */
 export interface ThemeLike {
@@ -27,8 +28,8 @@ function bold(theme: ThemeLike, text: string): string {
 /** 状态总览里"上次同步"的展示：只留到分钟，秒和时区对用户没意义。 */
 function formatLastSynced(iso: string | null): string {
 	if (!iso) return "从未同步";
-	const matched = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.exec(iso);
-	return matched ? matched[0]!.replace("T", " ") : iso;
+	// lastSyncedAt 是 UTC 字符串，展示前必须换算到本机时区
+	return formatLocalTimestamp(iso);
 }
 
 /**
