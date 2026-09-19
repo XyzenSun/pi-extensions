@@ -10,6 +10,7 @@ import type { SyncState } from "../system/state.ts";
 import type { FileComparison, InventoryResult } from "../sync/inventory.ts";
 import type { CaptureResult } from "../sync/capture.ts";
 import type { ValidationError } from "../sync/validate.ts";
+import { formatLocalTimestamp } from "./time-format.ts";
 
 // ========== ANSI 颜色 ==========
 
@@ -103,7 +104,7 @@ export function formatSyncStatusV2(input: SyncStatusV2Input): string {
 
 	// 上次同步
 	if (state.lastSyncedAt) {
-		const when = formatTimestamp(state.lastSyncedAt);
+		const when = formatLocalTimestamp(state.lastSyncedAt);
 		const short = state.lastSyncedCommit?.substring(0, 7) ?? "?";
 		lines.push(`  上次同步   ${when} (${short})`);
 	} else {
@@ -588,9 +589,3 @@ export function formatSyncPlanMessage(
 	return lines.join("\n");
 }
 
-// ========== 辅助 ==========
-
-function formatTimestamp(iso: string): string {
-	const m = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.exec(iso);
-	return m ? m[0]!.replace("T", " ") : iso;
-}
