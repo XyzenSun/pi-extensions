@@ -46,22 +46,31 @@ function plain(lines: string[]): string {
 
 describe("tui view", () => {
 	it("always shows branch, sync gap, last sync and autoSync in the summary", () => {
-		const lines = renderStatusSummary(
-			createTuiState(
-				statusSummary({
-					ahead: 2,
-					behind: 3,
-					lastSyncedAt: "2026-09-11T08:30:12.000Z",
-					autoSyncEnabled: true,
-				}),
-			),
-			theme,
-		);
-		const text = plain(lines);
-		expect(text).toContain("分支 main");
-		expect(text).toContain("待推送 2 · 待拉取 3");
-		expect(text).toContain("上次同步 2026-09-11 08:30");
-		expect(text).toContain("自动同步：开");
+		// lastSyncedAt 存的是 UTC，展示要换算到本机时区；固定时区才能断言具体值
+		const previousTimeZone = process.env.TZ;
+		process.env.TZ = "Asia/Shanghai";
+		try {
+			const lines = renderStatusSummary(
+				createTuiState(
+					statusSummary({
+						ahead: 2,
+						behind: 3,
+						lastSyncedAt: "2026-09-11T08:30:12.000Z",
+						autoSyncEnabled: true,
+					}),
+				),
+				theme,
+			);
+			const text = plain(lines);
+			expect(text).toContain("分支 main");
+			expect(text).toContain("待推送 2 · 待拉取 3");
+			// 08:30Z 在 UTC+8 是当天 16:30
+			expect(text).toContain("上次同步 2026-09-11 16:30");
+			expect(text).toContain("自动同步：开");
+		} finally {
+			if (previousTimeZone === undefined) delete process.env.TZ;
+			else process.env.TZ = previousTimeZone;
+		}
 	});
 
 	it("reports an up-to-date repository instead of zero counters", () => {
