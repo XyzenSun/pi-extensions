@@ -1363,3 +1363,200 @@ describe.sequential("direct pull and push commands (tui-prd §3)", () => {
 		});
 	});
 });
+
+describe.sequential("first pull choice after joining an existing repository", () => {
+	/** 编排层首次接入已有仓库后的返回：远端配置尚未应用，等待用户选择。 */
+	const setupChoiceResult: RunResult = {
+		ok: true,
+		code: "first_pull_choice_required",
+		message: "已连接到现有配置仓库，本机配置未做任何改动。",
+		reload: false,
+		mode: "setup",
+		phase: "complete",
+	};
+
+	const smartPullLabel =
+		"智能化拉取 —— 冲突自动远端优先，保留本机独有文件";
+	const overwriteLabel =
+		"以远端覆盖本机 —— 本机与远端不一致处全部以远端为准";
+	const skipLabel = "暂不拉取 —— 保持本机现状，稍后运行 /pisync";
+
+	function mockSetupAwaitingChoice() {
+		const planSpy = vi
+			.spyOn(PiSyncCommands.prototype, "plan")
+			.mockResolvedValue({ kind: "setup", message: "Mocked setup plan" });
+		const runSpy = vi
+			.spyOn(PiSyncCommands.prototype, "run")
+			.mockResolvedValue(setupChoiceResult);
+		return { planSpy, runSpy };
+	}
+
+	it("offers the three first-pull options after setup and runs a smart pull", async () => {
+		const { planSpy, runSpy } = mockSetupAwaitingChoice();
+		const pullSpy = vi
+			.spyOn(PiSyncCommands.prototype, "pull")
+			.mockResolvedValue({
+				ok: true,
+				code: "ok",
+				message: "Pull：已完成。",
+				reload: false,
+			});
+		try {
+			const api = new FakeExtensionApi();
+			register(api);
+			const ctx = createRpcContext();
+			ctx.ui.selectResponses = [smartPullLabel];
+
+			await api.commands.get("pisync")!.handler(undefined, ctx);
+
+			expect(ctx.ui.selectCalls).toEqual([
+				{
+					title: "首次拉取：如何应用远端配置？",
+					options: [smartPullLabel, overwriteLabel, skipLabel],
+				},
+			]);
+			expect(pullSpy).toHaveBeenCalledTimes(1);
+			expect(notificationTextOf(ctx)).toContain("Pull：已完成。");
+			expect(ctx.ui.statusUpdates).toEqual([
+				{ key: "pi-sync", value: undefined },
+			]);
+		} finally {
+			planSpy.mockRestore();
+			runSpy.mockRestore();
+			pullSpy.mockRestore();
+		}
+	});
+
+	it("runs overwriteFromRemote when the user picks remote-over-local", async () => {
+		const { planSpy, runSpy } = mockSetupAwaitingChoice();
+		const pullSpy = vi.spyOn(PiSyncCommands.prototype, "pull");
+		const overwriteSpy = vi
+			.spyOn(PiSyncCommands.prototype, "overwriteFromRemote")
+			.mockResolvedValue({
+				ok: true,
+				code: "ok",
+				message: "已以远端覆盖本机。",
+				reload: false,
+				mode: "sync",
+				phase: "complete",
+			});
+		try {
+			const api = new FakeExtensionApi();
+			register(api);
+			const ctx = createRpcContext();
+			ctx.ui.selectResponses = [overwriteLabel];
+
+			await api.commands.get("pisync")!.handler(undefined, ctx);
+
+			expect(overwriteSpy).toHaveBeenCalledTimes(1);
+			expect(pullSpy).not.toHaveBeenCalled();
+			expect(notificationTextOf(ctx)).toContain("已以远端覆盖本机。");
+		} finally {
+			planSpy.mockRestore();
+			runSpy.mockRestore();
+			pullSpy.mockRestore();
+			overwriteSpy.mockRestore();
+		}
+	});
+
+	it.each([skipLabel, undefined])(
+		"applies nothing when the user skips or cancels the first pull (%s)",
+		async (choice) => {
+			const { planSpy, runSpy } = mockSetupAwaitingChoice();
+			const pullSpy = vi.spyOn(PiSyncCommands.prototype, "pull");
+			const overwriteSpy = vi.spyOn(
+				PiSyncCommands.prototype,
+				"overwriteFromRemote",
+			);
+			try {
+				const api = new FakeExtensionApi();
+				register(api);
+				const ctx = createRpcContext();
+				ctx.ui.selectResponses = [choice];
+
+				await api.commands.get("pisync")!.handler(undefined, ctx);
+
+				expect(pullSpy).not.toHaveBeenCalled();
+				expect(overwriteSpy).not.toHaveBeenCalled();
+				expect(notificationTextOf(ctx)).toContain(
+					"已跳过首次拉取，本机配置未改动。",
+				);
+			} finally {
+				planSpy.mockRestore();
+				runSpy.mockRestore();
+				pullSpy.mockRestore();
+				overwriteSpy.mockRestore();
+			}
+		},
+	);
+
+	it("applies nothing in headless mode and tells the user to pick in a UI session", async () => {
+		const { planSpy, runSpy } = mockSetupAwaitingChoice();
+		const pullSpy = vi.spyOn(PiSyncCommands.prototype, "pull");
+		const overwriteSpy = vi.spyOn(
+			PiSyncCommands.prototype,
+			"overwriteFromRemote",
+		);
+		try {
+			const api = new FakeExtensionApi();
+			register(api);
+			const ctx = createRpcContext();
+			ctx.hasUI = false;
+
+			await api.commands.get("pisync")!.handler(undefined, ctx);
+
+			expect(ctx.ui.selectCalls).toHaveLength(0);
+			expect(pullSpy).not.toHaveBeenCalled();
+			expect(overwriteSpy).not.toHaveBeenCalled();
+			expect(notificationTextOf(ctx)).toContain(
+				"请在带 UI 的 Pi session 中运行 /pisync，选择智能化拉取或以远端覆盖本机。",
+			);
+		} finally {
+			planSpy.mockRestore();
+			runSpy.mockRestore();
+			pullSpy.mockRestore();
+			overwriteSpy.mockRestore();
+		}
+	});
+
+	it("asks for package approval during a first smart pull and retries with it", async () => {
+		const { planSpy, runSpy } = mockSetupAwaitingChoice();
+		const pullSpy = vi
+			.spyOn(PiSyncCommands.prototype, "pull")
+			.mockResolvedValueOnce({
+				ok: false,
+				code: "approval_required",
+				message: "同步的设置请求变更包。",
+				reload: false,
+				details: { packages: ["npm:first-pull-package"] },
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				code: "ok",
+				message: "Pull：已完成。",
+				reload: false,
+			});
+		try {
+			const api = new FakeExtensionApi();
+			register(api);
+			const ctx = createRpcContext();
+			ctx.ui.selectResponses = [smartPullLabel];
+			ctx.ui.confirmResponses = [true];
+
+			await api.commands.get("pisync")!.handler(undefined, ctx);
+
+			expect(pullSpy).toHaveBeenCalledTimes(2);
+			// 第二次调用必须带上用户批准的包源。
+			expect(pullSpy.mock.calls[1][1]).toEqual({
+				approvedSources: ["npm:first-pull-package"],
+				remember: false,
+			});
+			expect(ctx.ui.confirmCalls[0]?.title).toBe("pi-sync: 批准包安装");
+			expect(notificationTextOf(ctx)).toContain("Pull：已完成。");
+		} finally {
+			planSpy.mockRestore();
+			runSpy.mockRestore();
+			pullSpy.mockRestore();
+		}
+	});
+});

@@ -310,6 +310,23 @@ export async function executeSetupFlow(
 				timeout: existingConfig.pullTimeoutMs,
 			});
 			lines.push(pulled ? "已更新到最新。" : "已是最新。");
+
+			// 接入已有仓库到此为止：只完成 clone 与状态登记，绝不把远端配置
+			// 落到本机。智能化拉取与以远端覆盖本机对本机独有文件的处理截然
+			// 不同（保留 vs 删除），首次接入必须由用户当场选择。这里返回
+			// first_pull_choice_required，由扩展层弹选择框后再走对应链路。
+			onProgress?.("正在保存状态……");
+			await updateState(agentDir, { repoPath });
+			lines.push("");
+			lines.push("已连接到现有配置仓库，本机配置未做任何改动。");
+			lines.push("请选择首次拉取方式：智能化拉取，或以远端覆盖本机。");
+			return {
+				message: lines.join("\n"),
+				needsReload: false,
+				ok: true,
+				code: "first_pull_choice_required",
+				level: "info",
+			};
 		}
 
 		onProgress?.("正在保存状态……");

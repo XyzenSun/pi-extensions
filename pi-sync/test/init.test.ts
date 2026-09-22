@@ -340,29 +340,40 @@ describe("PiSyncCommands.run setup flow (end-to-end with a real git remote)", ()
 		);
 	}, 30000);
 
-	it("onboards a new device from an existing remote and then returns noop", async () => {
+	it("onboards a new device without applying the remote config until a pull runs", async () => {
 		onboardedAgentDir = join(workDir, "machine-b", "agent");
 		await mkdir(onboardedAgentDir, { recursive: true });
 
 		const commands = new PiSyncCommands(onboardedAgentDir);
 		const setup = await commands.run({
 			gitUrl: url,
-			packageApproval: {
-				approvedSources: [
-					"npm:@xyzensun/pi-sync",
-					"npm:pi-lens",
-					"npm:context-mode",
-				],
-			},
 		});
 
+		// 首次接入已有仓库：初始化只登记状态，绝不自动把远端配置落到本机。
 		expect(setup.ok, setup.message).toBe(true);
 		expect(setup).toMatchObject({
 			ok: true,
+			code: "first_pull_choice_required",
 			mode: "setup",
 			phase: "complete",
-			reload: true,
+			reload: false,
 		});
+		expect(setup.message).toContain("已连接到现有配置仓库，本机配置未做任何改动。");
+		// 拉取方式选择之前，远端 settings 不得出现在本机。
+		expect(
+			existsSync(join(onboardedAgentDir, "settings.json")),
+		).toBe(false);
+
+		// 用户选择智能化拉取（扩展层收到选择后调用 pull）：
+		// 远端 settings 落地，包安装按审批执行。
+		const pull = await commands.pull(undefined, {
+			approvedSources: [
+				"npm:@xyzensun/pi-sync",
+				"npm:pi-lens",
+				"npm:context-mode",
+			],
+		});
+		expect(pull.ok, pull.message).toBe(true);
 		expect(
 			JSON.parse(
 				await readFile(join(onboardedAgentDir, "settings.json"), "utf-8"),

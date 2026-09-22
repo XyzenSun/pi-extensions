@@ -7,11 +7,16 @@ export type ResultCode =
 	| "blocked_validation"
 	| "approval_required"
 	| "selection_required"
+	| "first_pull_choice_required"
 	| "git_failed"
 	| "partial_failure";
 
 export type NotificationLevel = "info" | "warning" | "error";
-type FailureResultCode = Exclude<ResultCode, "ok" | "noop">;
+/** ok 之外的非失败待决策码：流程未完成但不是出错。 */
+type FailureResultCode = Exclude<
+	ResultCode,
+	"ok" | "noop" | "first_pull_choice_required"
+>;
 
 function assertNever(value: never): never {
 	throw new Error(`未知的结果码：${value}`);
@@ -203,6 +208,10 @@ export function notificationLevelForResult(
 		case "approval_required":
 		case "selection_required":
 			return "warning";
+		// 首次拉取选择是正常的待决策状态而非错误，用 info 避免无 UI 模式下
+		// 被当作失败展示。
+		case "first_pull_choice_required":
+			return "info";
 		case "git_failed":
 		case "partial_failure":
 			return "error";

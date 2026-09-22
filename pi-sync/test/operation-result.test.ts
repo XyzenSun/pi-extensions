@@ -40,6 +40,7 @@ describe("structured operation results", () => {
 		["blocked_conflict", "warning"],
 		["blocked_validation", "warning"],
 		["approval_required", "warning"],
+		["first_pull_choice_required", "info"],
 		["git_failed", "error"],
 		["partial_failure", "error"],
 	] as const)("maps %s to a %s notification", (code, level) => {

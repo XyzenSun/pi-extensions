@@ -623,18 +623,7 @@ async function handleDirectSync(
 	if (result === null) return;
 
 	// push 遇冲突是唯一保留的交互；pull 侧由编排层自动远端优先，不会走到这里。
-	const conflict =
-		result.details && typeof result.details === "object"
-			? (result.details as { conflict?: unknown }).conflict
-			: undefined;
-	if (isSyncConflictRequest(conflict)) {
-		await handleSyncConflict(conflict, result.message, cmds, pi, ctx);
-		return;
-	}
-
-	notifyOperationResult(result, ctx);
-	if (result.ok) onSyncComplete();
-	await maybePromptReload(result, ctx, direction);
+	await finalizeSyncResult(result, cmds, pi, ctx, onSyncComplete, direction);
 }
 
 /**
@@ -904,7 +893,6 @@ async function handlePiSync(
 	onSyncComplete: () => void,
 ): Promise<void> {
 	let gitUrl: string | undefined;
-	let packageApproval: RunOptions["packageApproval"];
 
 	const run = createOperationRunner(ctx, (operationOptions) =>
 		cmds.run(operationOptions),
@@ -937,6 +925,13 @@ async function handlePiSync(
 		if (result === null) return;
 	}
 
+	// 首次接入已有仓库：初始化只登记状态，远端配置如何落到本机
+	// （智能化拉取 vs 以远端覆盖本机）必须由用户当场选择。
+	if (result.code === "first_pull_choice_required") {
+		await handleFirstPullChoice(cmds, pi, ctx, result.message, onSyncComplete);
+		return;
+	}
+
 	while (result.code === "selection_required") {
 		const request = extensionSelectionRequestFromResult(result);
 		if (!request) {
@@ -954,19 +949,30 @@ async function handlePiSync(
 	}
 
 	if (result.code === "approval_required") {
-		const approval = await requestPackageApproval(result, ctx);
-		if (!approval.approved) {
-			ctx.ui.notify("已取消包安装。", "warning");
-			return;
-		}
-		packageApproval = {
-			approvedSources: approval.approvedSources,
-			remember: approval.remember,
-		};
-		result = await run({ gitUrl, packageApproval, selections: syncSelections });
+		result = await requestApprovalAndRerun(result, run, ctx, {
+			gitUrl,
+			selections: syncSelections,
+		});
 		if (result === null) return;
 	}
 
+	await finalizeSyncResult(result, cmds, pi, ctx, onSyncComplete);
+}
+
+/**
+ * 同步结果的统一收尾：Git 冲突转交、结果通知、状态栏刷新与 reload 询问。
+ *
+ * /pisync、/pisync pull|push 与首次拉取三条入口的收尾完全一致，
+ * 只有各自的执行链路不同，故在此复用。
+ */
+async function finalizeSyncResult(
+	result: CommandResult,
+	cmds: PiSyncCommands,
+	pi: ExtensionAPI,
+	ctx: ExtensionCommandContext,
+	onSyncComplete: () => void,
+	direction?: "pull" | "push",
+): Promise<void> {
 	const conflict =
 		result.details && typeof result.details === "object"
 			? (result.details as { conflict?: unknown }).conflict
@@ -978,7 +984,101 @@ async function handlePiSync(
 
 	notifyOperationResult(result, ctx);
 	if (result.ok) onSyncComplete();
-	await maybePromptReload(result, ctx);
+	await maybePromptReload(result, ctx, direction);
+}
+
+/**
+ * 包审批交互：询问用户后带上批准结果重跑。
+ *
+ * 用户拒绝时通知并返回 null，调用方据此终止流程。
+ * rerunOptions 携带各入口自己的上下文（如完整同步的 gitUrl 与选择）。
+ */
+async function requestApprovalAndRerun(
+	result: CommandResult,
+	run: (options: RunOptions) => Promise<RunResult | null>,
+	ctx: ExtensionCommandContext,
+	rerunOptions: RunOptions,
+): Promise<RunResult | null> {
+	const approval = await requestPackageApproval(result, ctx);
+	if (!approval.approved) {
+		ctx.ui.notify("已取消包安装。", "warning");
+		return null;
+	}
+	return run({
+		...rerunOptions,
+		packageApproval: {
+			approvedSources: approval.approvedSources,
+			remember: approval.remember,
+		},
+	});
+}
+
+/**
+ * 首次接入已有仓库后的拉取方式选择。
+ *
+ * 初始化只完成 clone 与状态登记，绝不替用户决定本机配置的命运：
+ * 智能化拉取与以远端覆盖本机对本机独有文件的处理截然不同
+ * （保留 vs 删除），必须交由用户当场选择。无 UI 的模式无法询问，
+ * 因此什么都不应用，提示到带 UI 的 session 里再选。
+ */
+async function handleFirstPullChoice(
+	cmds: PiSyncCommands,
+	pi: ExtensionAPI,
+	ctx: ExtensionCommandContext,
+	setupMessage: string,
+	onSyncComplete: () => void,
+): Promise<void> {
+	if (!ctx.hasUI) {
+		ctx.ui.notify(
+			`pi-sync: ${setupMessage}\n请在带 UI 的 Pi session 中运行 /pisync，选择智能化拉取或以远端覆盖本机。`,
+			"info",
+		);
+		return;
+	}
+
+	const smartPullLabel = "智能化拉取 —— 冲突自动远端优先，保留本机独有文件";
+	const overwriteLabel = "以远端覆盖本机 —— 本机与远端不一致处全部以远端为准";
+	const skipLabel = "暂不拉取 —— 保持本机现状，稍后运行 /pisync";
+	const choice = await ctx.ui.select("首次拉取：如何应用远端配置？", [
+		smartPullLabel,
+		overwriteLabel,
+		skipLabel,
+	]);
+	if (choice === undefined || choice === skipLabel) {
+		ctx.ui.notify(
+			"pi-sync: 已跳过首次拉取，本机配置未改动。可随时运行 /pisync 再选择。",
+			"info",
+		);
+		return;
+	}
+
+	if (choice === overwriteLabel) {
+		const run = createOperationRunner(ctx, (options) =>
+			cmds.overwriteFromRemote(options),
+		);
+		const result = await run();
+		if (result === null) return;
+		await finalizeSyncResult(result, cmds, pi, ctx, onSyncComplete, "pull");
+		return;
+	}
+
+	// 智能化拉取：与 TUI 面板 pull-smart 同一条链路——冲突自动远端优先，
+	// 包审批保留交互（首次接入不宜静默装包）。
+	const run = createOperationRunner(ctx, (options) =>
+		cmds
+			.pull(undefined, options.packageApproval, options.onProgress, {
+				signal: options.signal,
+				onGitCommandStart: options.onGitCommandStart,
+			})
+			.then(toRunResult("pull")),
+	);
+	let result = await run();
+	if (result === null) return;
+	if (result.code === "approval_required") {
+		result = await requestApprovalAndRerun(result, run, ctx, {});
+		if (result === null) return;
+	}
+	await finalizeSyncResult(result, cmds, pi, ctx, onSyncComplete, "pull");
 }
 
 async function requestPackageApproval(
