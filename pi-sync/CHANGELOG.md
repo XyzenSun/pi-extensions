@@ -5,6 +5,18 @@ All notable changes to `@xyzensun/pi-sync` are documented here.
 This package is forked from `@jachy/pi-git-sync` 0.7.1. For the upstream
 history see <https://github.com/jachy-h/pi-git-sync>.
 
+## [0.3.2] - 2026-09-22
+
+### Fixed
+
+- Last-sync time is now shown in the local time zone. `state.json` stores
+  `lastSyncedAt` as a UTC string (`new Date().toISOString()`), and the earlier
+  rendering sliced off the first 16 characters, displaying UTC as if it were
+  local time — off by 8 hours on a UTC+8 machine. Both the TUI panel status
+  summary and the `/pisync` status line now format through a single helper that
+  converts to the machine's time zone at minute precision; values that are not
+  valid timestamps are passed through unchanged.
+
 ## [0.3.0] - 2026-09-11
 
 ### Added
