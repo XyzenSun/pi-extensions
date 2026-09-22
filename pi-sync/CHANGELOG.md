@@ -5,6 +5,21 @@ All notable changes to `@xyzensun/pi-sync` are documented here.
 This package is forked from `@jachy/pi-git-sync` 0.7.1. For the upstream
 history see <https://github.com/jachy-h/pi-git-sync>.
 
+## [0.3.3] - 2026-09-23
+
+### Changed
+
+- Joining an existing repository no longer auto-applies the remote config.
+- Previously, running `/pisync` on a new device cloned the repository and
+  immediately applied the remote configuration to the local machine without
+  asking. Setup now only clones and registers the repository, then returns a
+  `first_pull_choice_required` result so the extension asks how to proceed:
+  smart pull (remote wins conflicts, local-only files kept), overwrite local
+  from remote (mirror, deletes local-only files), or skip for now. Headless
+  sessions (`-p`, rpc, json) cannot ask, so they apply nothing and direct the
+  user to a UI session. The empty-repository first-machine flow (capture and
+  push local config) is unchanged.
+
 ## [0.3.2] - 2026-09-22
 
 ### Fixed
