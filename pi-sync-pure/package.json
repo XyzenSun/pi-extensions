@@ -11,8 +11,7 @@
     "src/",
     "README.md",
     "LICENSE",
-    ".gitignore",
-    "test/README.md"
+    ".gitignore"
   ],
   "engines": {
     "node": ">=22.19.0"
@@ -31,9 +30,8 @@
     ]
   },
   "scripts": {
-    "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run typecheck && npm test"
+    "prepublishOnly": "npm run typecheck"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
@@ -41,7 +39,6 @@
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "@types/node": "^22.0.0",
-    "typescript": "^5.7.0",
-    "vitest": "^3.2.7"
+    "typescript": "^5.7.0"
   }
 }

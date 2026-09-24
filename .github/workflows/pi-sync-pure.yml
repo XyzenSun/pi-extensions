@@ -29,10 +29,6 @@ jobs:
         working-directory: pi-sync-pure
         run: npm run typecheck
 
-      - name: Test
-        working-directory: pi-sync-pure
-        run: npm test
-
       - name: Publish to npm
         working-directory: pi-sync-pure
         run: npm publish --access public --ignore-scripts

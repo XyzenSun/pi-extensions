@@ -29,8 +29,8 @@ pi-sync-pure/
 
 ## 开发与验证
 
-本地加载测试: `pi -e ./pi-sync-pure/index.ts`，改动后在 pi 中执行 `/reload` 再验证。
+本地加载测试: `pi -e ./pi-sync-pure/index.ts`，改动后在 pi 中执行 `/reload` 再验证。类型检查: `cd pi-sync-pure && npm run typecheck`。
 
-测试使用 vitest，范围限于核心单元测试 (git 操作封装、glob 过滤、adapter、配置解析)，不写 E2E，不设覆盖率门禁。测试仓库 fixture 一律在临时目录中创建，不得触碰真实的 `~/.pi/config-repo/` 与 `~/.pi/agent/`。
+本项目不维护自动化测试，验证方式为 typecheck 加 `pi -e` 手动验证；改动 git 序列时在临时目录手工搭建 fixture 验证，不得触碰真实的 `~/.pi/config-repo/` 与 `~/.pi/agent/`。
 
 发布通过 `.github/workflows/pi-sync-pure.yml` 手动触发，不在本地执行 npm publish；触发前确认 package.json 的 version 已更新。

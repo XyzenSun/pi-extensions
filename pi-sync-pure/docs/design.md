@@ -65,9 +65,9 @@ autoSync 在 pi 会话启动时执行一次 (不设定时器——配置更新�
 
 ## 测试与发布
 
-测试用 vitest 重写，范围限于核心单元测试：git 操作封装、glob 过滤、adapter、配置解析。不写 E2E，不设覆盖率门禁。测试 fixture 一律在临时目录创建，不触碰真实 agent 目录。
+不维护自动化测试，验证方式为 typecheck 加 `pi -e` 手动验证；改动 git 序列时在临时目录手工搭建 fixture 验证，不触碰真实 agent 目录。
 
-发布通过 `.github/workflows/pi-sync-pure.yml` 手动触发 (workflow_dispatch)，形式与仓库现有 workflow 一致；触发前确认 package.json 的 version 已更新。
+发布通过 `.github/workflows/pi-sync-pure.yml` 手动触发 (workflow_dispatch)，门禁为 typecheck；触发前确认 package.json 的 version 已更新。
 
 ## 旧版处置
 

@@ -96,15 +96,12 @@ include/exclude 使用 glob；隐藏文件默认不参与同步 (`.gitignore` �
 
 autoSync 在 pi 会话启动时执行一次，等价于自动的 `merge-down --main --theirs`：先把本机现状 push 到设备分支完成存档，再从 main 合并（冲突取 main）。main 有新内容时会提示执行 `/reload` 使其生效，无变化则静默。没有定时器——配置更新后需要 reload 才生效，定时拉取意义不大。同步配置可能改变 `settings.json` 中的 `packages` 声明；插件不会安装包，用户可自行运行 `pi update --extensions`。
 
-## 开发与测试
+## 开发与验证
 
 ```bash
 pi -e ./pi-sync-pure/index.ts
-cd pi-sync-pure
-npm test
-npm run typecheck
 ```
 
-测试只在临时目录中创建 Git 与文件系统 fixture，不访问真实的 `~/.pi/config-repo/` 或 `~/.pi/agent/`。
+改动后在 pi 中执行 `/reload` 验证。类型检查: `cd pi-sync-pure && npm run typecheck`。
 
-发布通过 GitHub Actions 手动触发 `.github/workflows/pi-sync-pure.yml` 完成；发布前更新 `package.json` 版本。本地不要运行 `npm publish`。
+发布通过 GitHub Actions 手动触发 `.github/workflows/pi-sync-pure.yml` 完成，门禁为 typecheck；发布前更新 `package.json` 版本。本地不要运行 `npm publish`。

@@ -20,7 +20,6 @@ pi-sync-pure/
 │   ├── operations.ts     # 8 个子命令的编排, 每个操作 = git 序列 + capture/materialize 的组合
 │   ├── commands.ts       # 子命令解析 (push/pull/publish/align/merge-up/merge-down/remote/rename/status)
 │   └── ui.ts             # 交互选择器/输入框/确认弹窗; 非交互会话全部短路
-└── test/                 # vitest, fixture 一律在临时目录
 ```
 
 ## 旧版复用策略
@@ -60,20 +59,21 @@ merge 冲突即停时输出冲突文件清单，提示用户处理后重试或�
 
 ## 实现步骤
 
-1. 脚手架: package.json、index.ts 骨架、tsconfig (如旧版有 vitest 配置可参考其 vitest.config.ts)。
+1. 脚手架: package.json、index.ts 骨架、tsconfig。
 2. 基础层: git.ts、device-id.ts、config.ts (含状态文件 `~/.pi/agent/pi-sync-pure.json`)。
 3. 搬运层: glob.ts (复用)、adapters.ts (复用+简化)、capture.ts、materialize.ts。
 4. operations.ts: 按上表实现 8 操作 + status。
 5. 初始化流程: 检测 `~/.pi/config-repo/` 不存在 → 输入设备名 (默认 device-id) → clone → 远端有 `device/*` 时列出认领 → capture + commit + push -f；以及 remote/rename 两个管理操作。
 6. commands.ts + ui.ts: 交互会话弹选择器，force 系 (pull/align/publish) 确认默认取消；非交互直接执行子命令，`/pisync` 无参数打印用法。pi 扩展 API 参考 `../docs/extensions.md`。
 7. autoSync: 定时器 + merge-down --theirs，仅本机 `git status --porcelain` 为空时执行。
-8. 测试: vitest 覆盖 git.ts、glob.ts、capture/materialize、config 解析、settings adapter 投影。
-9. 文档与发布: README.md、`.github/workflows/pi-sync-pure.yml` (形式与 `../.github/workflows/` 现有 workflow 一致，手动触发)、根 README.md 插件清单加一行。
+8. 文档与发布: README.md、`.github/workflows/pi-sync-pure.yml` (手动触发)、根 README.md 插件清单加一行。
+
+> 注: 实施后根据用户决定移除了 vitest 测试与 Test 步骤, CI 门禁仅保留 typecheck。
 
 ## 验收清单
 
 - 8 个子命令 + status + 初始化 + autoSync 全部可用，行为与 `design.md` 操作语义表一致。
 - 非交互会话 (pi -p) 不弹任何 UI；交互会话 force 系有一步确认。
 - `pi -e ./pi-sync-pure/index.ts` 加载无报错。
-- vitest 全绿，测试不触碰真实 `~/.pi/` 目录。
+- typecheck 通过。
 - 根 README.md 插件清单已更新，workflow 文件就位 (不执行发布)。
