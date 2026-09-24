@@ -51,7 +51,6 @@ export async function initializeRepository(
     await fetchOrigin(paths.repoPath);
 
     const remoteDeviceBranches = await listRemoteDeviceBranches(paths.repoPath);
-    const remoteHasConfiguration = await remoteBranchExists(paths.repoPath, "main");
 
     // --new 表示强制新建设备分支, 不进入认领流程; 分支名的唯一性由用户自己确保。
     const selectedClaim = forceNewBranch
@@ -74,14 +73,14 @@ export async function initializeRepository(
     }
     if (remoteDeviceBranches.includes(selectedBranch)) {
       await git(paths.repoPath, ["checkout", "--force", "-B", selectedBranch, `origin/${selectedBranch}`]);
-    } else if (remoteHasConfiguration) {
-      await git(paths.repoPath, ["checkout", "--force", "-b", selectedBranch, "origin/main"]);
     } else {
+      // 新建一律 orphan 空分支, 不基于 main: 设备分支与 main 之间没有隐含继承,
+      // 内容交换只能通过显式的 push/merge-down/publish/align。
       await git(paths.repoPath, ["checkout", "--orphan", selectedBranch]);
       await git(paths.repoPath, ["clean", "-fdx"]);
       await scaffoldRepository(paths.repoPath);
     }
-    if (remoteHasConfiguration && await localBranchExists(paths.repoPath, "main")) {
+    if (await localBranchExists(paths.repoPath, "main")) {
       await git(paths.repoPath, ["branch", "-D", "main"]);
     }
     if (!existsSync(configPath)) await scaffoldRepository(paths.repoPath);
@@ -96,19 +95,17 @@ export async function initializeRepository(
       return {
         state,
         result: {
-          message: `已认领设备分支 ${selectedBranch}。执行 /pisync recover 将该分支的配置恢复到本机。`,
+          message: `已认领设备分支 ${selectedBranch}。/pisync push 将远程分支覆盖为本机当前配置; /pisync recover 将本机恢复为远程仓库数据。`,
         },
       };
     }
-    if (!remoteHasConfiguration) {
-      // 空仓库: scaffold 的配置引导需要一个初始提交让 orphan 分支真正诞生 (仅本地 commit, 不推送)。
-      await stageAndCommit(paths.repoPath, "Initialize pi-sync-pure device branch");
-    }
+    // 新建路径: scaffold 的配置引导需要一个初始提交让 orphan 分支真正诞生 (仅本地 commit, 不推送)。
+    await stageAndCommit(paths.repoPath, "Initialize pi-sync-pure device branch");
     await saveLocalState(paths.statePath, state);
     return {
       state,
       result: {
-        message: `初始化完成。设备分支 ${selectedBranch} 已就绪。执行 /pisync push 存档本机配置; 若想直接使用远端已有配置, 执行 /pisync recover。`,
+        message: `初始化完成。当前远程分支为空, 建议 /pisync push 推送备份本机配置。`,
       },
     };
   });
