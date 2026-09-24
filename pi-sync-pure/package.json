@@ -1,0 +1,47 @@
+{
+  "name": "@xyzensun/pi-sync-pure",
+  "version": "0.1.0",
+  "description": "Git-native Pi configuration synchronization using per-device branches",
+  "license": "MIT",
+  "author": "xyzensun",
+  "type": "module",
+  "main": "./index.ts",
+  "files": [
+    "index.ts",
+    "src/",
+    "README.md",
+    "LICENSE",
+    ".gitignore",
+    "test/README.md"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "git-sync",
+    "pi",
+    "sync",
+    "config"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm test"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.7"
+  }
+}
