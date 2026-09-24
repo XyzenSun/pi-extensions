@@ -63,18 +63,18 @@ export async function promptForRemote(context: SyncUi): Promise<string | undefin
 
 export async function promptForDeviceName(context: SyncUi, defaultName: string): Promise<string | undefined> {
   if (!context.hasUI) return undefined;
-  const value = await context.ui.input("设备名称 (分支 device/<名称>)", defaultName);
+  const value = await context.ui.input("设备分支名 (推荐 device/<名称>, 可自定义)", defaultName);
   return value?.trim() || defaultName;
 }
 
 export async function selectClaimedBranch(context: SyncUi, branches: string[]): Promise<string | null | undefined> {
   if (!context.hasUI || branches.length === 0) return undefined;
-  const selected = await context.ui.select("发现远端设备分支。选择要认领的分支, 或创建新设备分支", [
+  const selected = await context.ui.select("发现远端分支。选择要认领的分支, 或创建新分支", [
     ...branches,
-    "创建新的设备分支",
+    "创建新的分支",
   ]);
   if (!selected) return undefined;
-  return selected === "创建新的设备分支" ? null : selected;
+  return selected === "创建新的分支" ? null : selected;
 }
 
 export function reportResult(context: SyncUi, result: OperationResult): void {

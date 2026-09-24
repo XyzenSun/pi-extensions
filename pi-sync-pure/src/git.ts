@@ -55,9 +55,12 @@ export async function listBranchFiles(repoPath: string, branch: string, director
   return output.split(/\r?\n/).filter(Boolean);
 }
 
-export async function listRemoteDeviceBranches(repoPath: string): Promise<string[]> {
-  const output = (await git(repoPath, ["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin/device/"])).stdout;
-  return output.split(/\r?\n/).filter(Boolean).map((branch) => branch.replace(/^origin\//, ""));
+/** 可认领分支 = 远端全部分支, 只排除 main。分支名完全由用户决定, device/ 只是推荐前缀。 */
+export async function listClaimableBranches(repoPath: string): Promise<string[]> {
+  const output = (await git(repoPath, ["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin/"])).stdout;
+  return output.split(/\r?\n/).filter(Boolean)
+    .map((branch) => branch.replace(/^origin\//, ""))
+    .filter((branch) => branch !== "main");
 }
 
 export async function remoteBranchExists(repoPath: string, branch: string): Promise<boolean> {

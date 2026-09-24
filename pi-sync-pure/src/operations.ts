@@ -14,7 +14,7 @@ import {
   fetchOrigin,
   git,
   listConflictedPaths,
-  listRemoteDeviceBranches,
+  listClaimableBranches,
   localBranchExists,
   remoteBranchExists,
   stageAndCommit,
@@ -50,28 +50,28 @@ export async function initializeRepository(
     const configPath = join(paths.repoPath, "pi-sync.json");
     await fetchOrigin(paths.repoPath);
 
-    const remoteDeviceBranches = await listRemoteDeviceBranches(paths.repoPath);
+    const remoteClaimableBranches = await listClaimableBranches(paths.repoPath);
 
     // --new 表示强制新建设备分支, 不进入认领流程; 分支名的唯一性由用户自己确保。
     const selectedClaim = forceNewBranch
       ? null
-      : claimedBranch ?? (remoteDeviceBranches.length > 0 ? await chooseClaim?.(remoteDeviceBranches) : undefined);
-    if (remoteDeviceBranches.length > 0 && !claimedBranch && selectedClaim === undefined && !chooseClaim) {
-      throw new Error(`远端存在设备分支: ${remoteDeviceBranches.join(", ")}。请通过 init 指定要认领的 device/<名称> 分支。`);
+      : claimedBranch ?? (remoteClaimableBranches.length > 0 ? await chooseClaim?.(remoteClaimableBranches) : undefined);
+    if (remoteClaimableBranches.length > 0 && !claimedBranch && selectedClaim === undefined && !chooseClaim) {
+      throw new Error(`远端存在其他分支: ${remoteClaimableBranches.join(", ")}。请通过认领参数接管其一, 或使用 --new 强制新建。`);
     }
-    if (remoteDeviceBranches.length > 0 && chooseClaim && selectedClaim === undefined) {
+    if (remoteClaimableBranches.length > 0 && chooseClaim && selectedClaim === undefined) {
       throw new Error("初始化已取消。");
     }
     const createNewBranch = selectedClaim === null;
-    const selectedBranch = normalizeDeviceBranch(typeof selectedClaim === "string" ? selectedClaim : deviceName);
-    if (claimedBranch && !remoteDeviceBranches.includes(selectedBranch)) {
+    const selectedBranch = requireBranchName(typeof selectedClaim === "string" ? selectedClaim : deviceName);
+    if (claimedBranch && !remoteClaimableBranches.includes(selectedBranch)) {
       throw new Error(`远端不存在可认领的分支: ${selectedBranch}`);
     }
     await ensureValidBranchName(paths.repoPath, selectedBranch);
-    if (!remoteDeviceBranches.includes(selectedBranch) && !createNewBranch && await localBranchExists(paths.repoPath, selectedBranch)) {
+    if (!remoteClaimableBranches.includes(selectedBranch) && !createNewBranch && await localBranchExists(paths.repoPath, selectedBranch)) {
       throw new Error(`本地设备分支已存在: ${selectedBranch}`);
     }
-    if (remoteDeviceBranches.includes(selectedBranch)) {
+    if (remoteClaimableBranches.includes(selectedBranch)) {
       await git(paths.repoPath, ["checkout", "--force", "-B", selectedBranch, `origin/${selectedBranch}`]);
     } else {
       // 新建一律 orphan 空分支, 不基于 main: 设备分支与 main 之间没有隐含继承,
@@ -88,7 +88,7 @@ export async function initializeRepository(
     // init 只负责建立身份: clone、建分支、写状态文件。要不要把本机配置 push 到
     // 设备分支、要不要从远端恢复, 是 push/recover 的职责——否则迁移场景下落后的
     // 本机配置会顶掉设备分支, recover 就拿不到远端的好配置了。
-    const claimingExistingBranch = remoteDeviceBranches.includes(selectedBranch);
+    const claimingExistingBranch = remoteClaimableBranches.includes(selectedBranch);
     const state = { remoteUrl, deviceBranch: selectedBranch };
     if (claimingExistingBranch) {
       await saveLocalState(paths.statePath, state);
@@ -129,7 +129,7 @@ export async function recover(context: OperationContext, requestedBranch?: strin
     await fetchOrigin(context.paths.repoPath);
     let deviceBranch = context.state.deviceBranch;
     if (requestedBranch) {
-      deviceBranch = normalizeDeviceBranch(requestedBranch);
+      deviceBranch = requireBranchName(requestedBranch);
       if (!(await remoteBranchExists(context.paths.repoPath, deviceBranch))) {
         throw new Error(`远端分支不存在: ${deviceBranch}`);
       }
@@ -265,7 +265,7 @@ export async function changeRemote(context: OperationContext, remoteUrl: string)
 export async function renameDevice(context: OperationContext, requestedName: string): Promise<OperationResult> {
   return withSyncLock(async () => {
     const oldBranch = context.state.deviceBranch;
-    const newBranch = normalizeDeviceBranch(requestedName);
+    const newBranch = requireBranchName(requestedName);
     await fetchOrigin(context.paths.repoPath);
     await ensureValidBranchName(context.paths.repoPath, newBranch);
     if (oldBranch === newBranch) throw new Error("新分支名与当前设备分支相同。");
@@ -338,15 +338,11 @@ export async function runAutoSync(context: OperationContext): Promise<OperationR
   });
 }
 
-export function normalizeDeviceBranch(value: string): string {
-  const branch = value.startsWith("device/") ? value : `device/${value}`;
-  if (branch === "device/" || branch.endsWith("/")) throw new Error("设备分支名不能为空。");
+/** 分支名不做任何改写 (device/ 只是推荐前缀), 只校验非空。 */
+export function requireBranchName(value: string): string {
+  const branch = value.trim();
+  if (!branch || branch.endsWith("/")) throw new Error("分支名不能为空。");
   return branch;
-}
-
-/** merge/publish/align 的分支参数: main 保持原样, 其余视为设备分支自动补前缀。 */
-export function normalizeTargetBranch(value: string): string {
-  return value === "main" ? "main" : normalizeDeviceBranch(value);
 }
 
 export function parseMergeStrategy(args: string[], allowed: readonly ("ours" | "theirs")[]): MergeStrategy {

@@ -8,8 +8,6 @@ import {
   initializeRepository,
   mergeDown,
   mergeUp,
-  normalizeDeviceBranch,
-  normalizeTargetBranch,
   parseMergeStrategy,
   previewForceChanges,
   publish,
@@ -35,9 +33,9 @@ import {
 export const USAGE = `用法: /pisync <命令> [参数]
 
 命令:
-  init <remote-url> [设备名] [device/分支] [--new]  初始化或认领设备分支; --new 强制新建
+  init <remote-url> [设备名] [分支] [--new]      初始化或认领分支; --new 强制新建
   push                                      镜像本机配置并推送到设备分支
-  recover [device/分支]                      从远端设备分支无脑覆盖恢复本机
+  recover [分支]                            从远端设备分支无脑覆盖恢复本机
   publish [目标分支]                         强制以本机设备分支覆盖目标 (默认 main)
   align [源分支]                             强制以源分支覆盖本机设备分支 (默认 main)
   merge-up [目标分支] [--ours|--theirs]      合并本机到目标分支并推送 (默认 main)
@@ -46,7 +44,7 @@ export const USAGE = `用法: /pisync <命令> [参数]
   rename <新设备名>                          重命名设备分支 (不删除旧远端分支)
   status                                    查看工作区及远端 ahead/behind
 
-分支参数中裸名会自动补 device/ 前缀, main 保持原样。
+分支名使用你输入的原文, 不做任何改写; device/ 只是推荐的前缀习惯。认领范围为远端全部分支 (不含 main)。
 交互会话中可直接执行 /pisync 打开操作菜单。`;
 
 export interface CommandContext extends SyncUi {
@@ -93,14 +91,14 @@ export async function handleSyncCommand(rawArgs: string, context: CommandContext
       }
       case "publish": {
         if (args.length > 1) throw new Error("用法: /pisync publish [目标分支]");
-        const target = args[0] ? normalizeTargetBranch(args[0]) : undefined;
+        const target = args[0]?.trim() || undefined;
         if (!await confirmForceOperation(context, "publish", await listForceChanges(paths, state, target))) return;
         result = await publish(operationContext, target);
         break;
       }
       case "align": {
         if (args.length > 1) throw new Error("用法: /pisync align [源分支]");
-        const source = args[0] ? normalizeTargetBranch(args[0]) : undefined;
+        const source = args[0]?.trim() || undefined;
         if (!await confirmForceOperation(context, "align", await listForceChanges(paths, state, source))) return;
         result = await align(operationContext, source);
         break;
@@ -108,13 +106,13 @@ export async function handleSyncCommand(rawArgs: string, context: CommandContext
       case "merge-up": {
         const { positional, flags } = splitBranchAndFlags(args);
         if (positional.length > 1) throw new Error("用法: /pisync merge-up [目标分支] [--ours|--theirs]");
-        result = await mergeUp(operationContext, positional[0] ? normalizeTargetBranch(positional[0]) : undefined, parseMergeStrategy(flags, ["ours", "theirs"]));
+        result = await mergeUp(operationContext, positional[0]?.trim() || undefined, parseMergeStrategy(flags, ["ours", "theirs"]));
         break;
       }
       case "merge-down": {
         const { positional, flags } = splitBranchAndFlags(args);
         if (positional.length > 1) throw new Error("用法: /pisync merge-down [源分支] [--theirs|--ours]");
-        result = await mergeDown(operationContext, positional[0] ? normalizeTargetBranch(positional[0]) : undefined, parseMergeStrategy(flags, ["theirs", "ours"]));
+        result = await mergeDown(operationContext, positional[0]?.trim() || undefined, parseMergeStrategy(flags, ["theirs", "ours"]));
         break;
       }
       case "remote":
@@ -150,7 +148,7 @@ export async function initializeCommand(args: string[], paths: SyncPaths, contex
     let deviceName: string | undefined = positional[1];
     if (!deviceName && context.hasUI) deviceName = await promptForDeviceName(context, await defaultDeviceName());
     if (!deviceName) deviceName = await defaultDeviceName();
-    const explicitClaim = positional[2] ? normalizeDeviceBranch(positional[2]) : undefined;
+    const explicitClaim = positional[2]?.trim() || undefined;
     if (positional.length > 3) throw new Error("用法: /pisync init <remote-url> [设备名] [device/分支] [--new]");
     if (forceNewBranch && explicitClaim) throw new Error("--new 与认领分支参数不能同时使用。");
     const result = await initializeRepository(
