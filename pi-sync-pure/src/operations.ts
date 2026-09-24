@@ -86,9 +86,9 @@ export async function initializeRepository(
     }
     if (!existsSync(configPath)) await scaffoldRepository(paths.repoPath);
 
-    // 认领与新建是两条不同的路径: 认领的目的是找回旧配置, 若在此 capture + push -f,
-    // 新机器的空配置会覆盖旧分支内容, 认领就失去了意义。因此认领只切换分支并记录状态,
-    // 由用户随后执行 recover 把旧配置恢复到本机。
+    // init 只负责建立身份: clone、建分支、写状态文件。要不要把本机配置 push 到
+    // 设备分支、要不要从远端恢复, 是 push/recover 的职责——否则迁移场景下落后的
+    // 本机配置会顶掉设备分支, recover 就拿不到远端的好配置了。
     const claimingExistingBranch = remoteDeviceBranches.includes(selectedBranch);
     const state = { remoteUrl, deviceBranch: selectedBranch };
     if (claimingExistingBranch) {
@@ -96,21 +96,19 @@ export async function initializeRepository(
       return {
         state,
         result: {
-      message: `已认领设备分支 ${selectedBranch}, 未改动任何远端内容。执行 /pisync recover 将该分支的配置恢复到本机。`,
+          message: `已认领设备分支 ${selectedBranch}。执行 /pisync recover 将该分支的配置恢复到本机。`,
         },
       };
     }
-
-    const config = await loadConfig(paths.repoPath);
-    const adapterCache = new Map();
-    await capture(paths.agentDir, paths.repoPath, config, adapterCache);
-    await stageAndCommit(paths.repoPath, "Initialize pi-sync-pure device branch");
-    await git(paths.repoPath, ["push", "-f", "origin", `HEAD:${selectedBranch}`], { timeoutMs: 120_000 });
+    if (!remoteHasConfiguration) {
+      // 空仓库: scaffold 的配置引导需要一个初始提交让 orphan 分支真正诞生 (仅本地 commit, 不推送)。
+      await stageAndCommit(paths.repoPath, "Initialize pi-sync-pure device branch");
+    }
     await saveLocalState(paths.statePath, state);
     return {
       state,
       result: {
-        message: `初始化完成。当前设备分支为 ${selectedBranch}。`,
+        message: `初始化完成。设备分支 ${selectedBranch} 已就绪。执行 /pisync push 存档本机配置; 若想直接使用远端已有配置, 执行 /pisync recover。`,
       },
     };
   });

@@ -14,7 +14,9 @@ pi install npm:@xyzensun/pi-sync-pure
 /pisync
 ```
 
-在操作菜单选择 `init`，然后输入配置仓库的 Git remote URL 和设备名。默认设备名基于平台机器 UUID 的短哈希；无法读取机器 UUID 时使用随机短 ID。若仓库已有 `device/*` 分支，可在初始化中认领现有分支。认领只切换分支并记录状态，不会推送任何内容；随后执行 `/pisync recover` 即可把旧分支的配置恢复到本机。
+在操作菜单选择 `init`，然后输入配置仓库的 Git remote URL 和设备名。默认设备名基于平台机器 UUID 的短哈希；无法读取机器 UUID 时使用随机短 ID。若仓库已有 `device/*` 分支，可在初始化中认领现有分支。
+
+init 只建立身份：clone、建分支、写状态文件，不做任何数据动作。完成后按需选择：`/pisync push` 把本机配置存档到设备分支，或 `/pisync recover` 直接使用远端已有配置覆盖本机。
 
 非交互模式通过子命令明确表达意图：
 
