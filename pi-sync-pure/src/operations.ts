@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { LocalState, SyncPaths } from "./config.ts";
+import type { LocalState, PiSyncConfig, SyncPaths } from "./config.ts";
 import { loadConfig, saveLocalState, writeDefaultConfig } from "./config.ts";
-import { capture } from "./capture.ts";
+import { capture, type MirrorResult } from "./capture.ts";
 import { materialize } from "./materialize.ts";
 import {
   aheadBehind,
@@ -111,12 +111,34 @@ export async function initializeRepository(
   });
 }
 
+/**
+ * 把本机现状存档到设备分支: capture → commit → push -f。
+ * 所有 merge/publish 前都先走这一步, 保证未存档的改动永远不会被后续操作覆盖丢失。
+ * pushTarget 用于 publish 这类推到其他分支的变体。
+ */
+async function archiveLocal(context: OperationContext, config: PiSyncConfig, message: string, pushTarget?: string): Promise<{ committed: boolean; mirror: MirrorResult }> {
+  const mirror = await capture(context.paths.agentDir, context.paths.repoPath, config);
+  const committed = await stageAndCommit(context.paths.repoPath, message);
+  const refspec = pushTarget === undefined ? "HEAD" : `HEAD:${pushTarget}`;
+  await git(context.paths.repoPath, ["push", "-f", "origin", refspec], { timeoutMs: 120_000 });
+  return { committed, mirror };
+}
+
+/** 把仓库内容应用回本机 agent 目录, 返回受影响文件与 packages 声明是否可能变化。 */
+async function applyRepositoryToAgent(context: OperationContext, config: PiSyncConfig) {
+  const packagesBefore = await packageDeclaration(context.paths.agentDir);
+  const mirror = await materialize(context.paths.repoPath, context.paths.agentDir, config);
+  const packagesAfter = await packageDeclaration(context.paths.agentDir);
+  return {
+    changedFiles: [...mirror.copied, ...mirror.deleted],
+    packagesMayHaveChanged: packagesBefore !== packagesAfter,
+  };
+}
+
 export async function push(context: OperationContext): Promise<OperationResult> {
   return withSyncLock(async () => {
     const config = await loadConfig(context.paths.repoPath);
-    const mirror = await capture(context.paths.agentDir, context.paths.repoPath, config);
-    const committed = await stageAndCommit(context.paths.repoPath, "Sync Pi configuration");
-    await git(context.paths.repoPath, ["push", "-f", "origin", "HEAD"], { timeoutMs: 120_000 });
+    const { committed, mirror } = await archiveLocal(context, config, "Sync Pi configuration");
     return {
       message: committed ? `已推送到 ${context.state.deviceBranch}。` : `没有文件变化，已确认远端分支 ${context.state.deviceBranch} 最新。`,
       changedFiles: [...mirror.copied, ...mirror.deleted],
@@ -135,19 +157,16 @@ export async function recover(context: OperationContext, requestedBranch?: strin
       }
       await git(context.paths.repoPath, ["checkout", "-B", deviceBranch, `origin/${deviceBranch}`]);
     }
-    const packagesBefore = await packageDeclaration(context.paths.agentDir);
     await git(context.paths.repoPath, ["reset", "--hard", `origin/${deviceBranch}`]);
     const config = await loadConfig(context.paths.repoPath);
-    const mirror = await materialize(context.paths.repoPath, context.paths.agentDir, config);
-    const packagesAfter = await packageDeclaration(context.paths.agentDir);
+    const applied = await applyRepositoryToAgent(context, config);
     if (deviceBranch !== context.state.deviceBranch) {
       context.state.deviceBranch = deviceBranch;
       await saveLocalState(context.paths.statePath, context.state);
     }
     return {
       message: `已从 ${deviceBranch} 恢复本机配置。`,
-      changedFiles: [...mirror.copied, ...mirror.deleted],
-      packagesMayHaveChanged: packagesBefore !== packagesAfter,
+      ...applied,
     };
   });
 }
@@ -155,9 +174,7 @@ export async function recover(context: OperationContext, requestedBranch?: strin
 export async function publish(context: OperationContext, targetBranch = "main"): Promise<OperationResult> {
   return withSyncLock(async () => {
     const config = await loadConfig(context.paths.repoPath);
-    await capture(context.paths.agentDir, context.paths.repoPath, config);
-    const committed = await stageAndCommit(context.paths.repoPath, "Sync Pi configuration before publishing");
-    await git(context.paths.repoPath, ["push", "-f", "origin", `HEAD:${targetBranch}`], { timeoutMs: 120_000 });
+    const { committed } = await archiveLocal(context, config, "Sync Pi configuration before publishing", targetBranch);
     return {
       message: `${committed ? "已提交并" : "本机无新改动, 已"}强制发布 ${context.state.deviceBranch} 到 ${targetBranch}。`,
     };
@@ -168,15 +185,12 @@ export async function align(context: OperationContext, sourceBranch = "main"): P
   return withSyncLock(async () => {
     await fetchOrigin(context.paths.repoPath);
     if (!(await remoteBranchExists(context.paths.repoPath, sourceBranch))) throw new Error(`远端分支不存在: ${sourceBranch}`);
-    const packagesBefore = await packageDeclaration(context.paths.agentDir);
     await git(context.paths.repoPath, ["reset", "--hard", `origin/${sourceBranch}`]);
     const config = await loadConfig(context.paths.repoPath);
-    const mirror = await materialize(context.paths.repoPath, context.paths.agentDir, config);
-    const packagesAfter = await packageDeclaration(context.paths.agentDir);
+    const applied = await applyRepositoryToAgent(context, config);
     return {
       message: `已用 origin/${sourceBranch} 覆盖本机分支 ${context.state.deviceBranch}。`,
-      changedFiles: [...mirror.copied, ...mirror.deleted],
-      packagesMayHaveChanged: packagesBefore !== packagesAfter,
+      ...applied,
     };
   });
 }
@@ -186,9 +200,7 @@ export async function mergeUp(context: OperationContext, targetBranch = "main", 
     // 先存档本机改动再操作目标分支: 设备分支是本机现状的镜像, merge 前先 push
     // 保证任何后续失败都不会丢失未存档的改动。
     const config = await loadConfig(context.paths.repoPath);
-    await capture(context.paths.agentDir, context.paths.repoPath, config);
-    await stageAndCommit(context.paths.repoPath, "Sync Pi configuration before merge-up");
-    await git(context.paths.repoPath, ["push", "-f", "origin", "HEAD"], { timeoutMs: 120_000 });
+    await archiveLocal(context, config, "Sync Pi configuration before merge-up");
     await fetchOrigin(context.paths.repoPath);
 
     const originalBranch = context.state.deviceBranch;
@@ -224,9 +236,7 @@ export async function mergeDown(context: OperationContext, sourceBranch = "main"
     // 先存档本机改动再合并: 未 push 的改动一旦被后续 materialize 覆盖,
     // 就再也无法找回, 所以 merge 前必须先落进设备分支历史。
     const config = await loadConfig(context.paths.repoPath);
-    await capture(context.paths.agentDir, context.paths.repoPath, config);
-    await stageAndCommit(context.paths.repoPath, "Sync Pi configuration before merge-down");
-    await git(context.paths.repoPath, ["push", "-f", "origin", "HEAD"], { timeoutMs: 120_000 });
+    await archiveLocal(context, config, "Sync Pi configuration before merge-down");
     await fetchOrigin(context.paths.repoPath);
     if (!(await remoteBranchExists(context.paths.repoPath, sourceBranch))) throw new Error(`远端分支不存在: ${sourceBranch}`);
     try {
@@ -234,13 +244,10 @@ export async function mergeDown(context: OperationContext, sourceBranch = "main"
     } catch (error) {
       throw await abortAndFormatMergeError(context.paths.repoPath, error);
     }
-    const packagesBefore = await packageDeclaration(context.paths.agentDir);
-    const mirror = await materialize(context.paths.repoPath, context.paths.agentDir, config);
-    const packagesAfter = await packageDeclaration(context.paths.agentDir);
+    const applied = await applyRepositoryToAgent(context, config);
     return {
       message: `已将 origin/${sourceBranch} 合并到 ${context.state.deviceBranch}。`,
-      changedFiles: [...mirror.copied, ...mirror.deleted],
-      packagesMayHaveChanged: packagesBefore !== packagesAfter,
+      ...applied,
     };
   });
 }
@@ -313,9 +320,7 @@ export async function runAutoSync(context: OperationContext): Promise<OperationR
     // autoSync = 自动执行的 merge-down --main --theirs: 先把本机现状 push 到设备分支
     // 完成存档, 再从 main 合并。设备分支本来就是本机镜像, push 它不影响任何其他设备。
     const config = await loadConfig(context.paths.repoPath);
-    await capture(context.paths.agentDir, context.paths.repoPath, config);
-    await stageAndCommit(context.paths.repoPath, "Auto-sync Pi configuration");
-    await git(context.paths.repoPath, ["push", "-f", "origin", "HEAD"], { timeoutMs: 120_000 });
+    await archiveLocal(context, config, "Auto-sync Pi configuration");
     await fetchOrigin(context.paths.repoPath);
     if (!(await remoteBranchExists(context.paths.repoPath, "main"))) return undefined;
     const headBefore = (await git(context.paths.repoPath, ["rev-parse", "HEAD"])).stdout.trim();
@@ -327,13 +332,10 @@ export async function runAutoSync(context: OperationContext): Promise<OperationR
     const headAfter = (await git(context.paths.repoPath, ["rev-parse", "HEAD"])).stdout.trim();
     // HEAD 未移动说明 main 没有新内容, 静默结束, 不打扰用户。
     if (headAfter === headBefore) return undefined;
-    const packagesBefore = await packageDeclaration(context.paths.agentDir);
-    const mirror = await materialize(context.paths.repoPath, context.paths.agentDir, config);
-    const packagesAfter = await packageDeclaration(context.paths.agentDir);
+    const applied = await applyRepositoryToAgent(context, config);
     return {
       message: "autoSync 已从 main 合并新配置, 请执行 /reload 使其生效。",
-      changedFiles: [...mirror.copied, ...mirror.deleted],
-      packagesMayHaveChanged: packagesBefore !== packagesAfter,
+      ...applied,
     };
   });
 }

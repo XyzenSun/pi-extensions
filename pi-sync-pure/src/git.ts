@@ -38,21 +38,12 @@ export async function cloneRepository(remoteUrl: string, destination: string): P
   await gitOutsideRepository(["clone", "--origin", "origin", remoteUrl, destination], process.cwd(), { timeoutMs: 120_000 });
 }
 
-export async function currentBranch(repoPath: string): Promise<string> {
-  return (await git(repoPath, ["branch", "--show-current"])).stdout.trim();
-}
-
 export async function currentRemoteUrl(repoPath: string): Promise<string> {
   return (await git(repoPath, ["remote", "get-url", "origin"])).stdout.trim();
 }
 
 export async function fetchOrigin(repoPath: string): Promise<void> {
   await git(repoPath, ["fetch", "origin", "--prune"], { timeoutMs: 120_000 });
-}
-
-export async function listBranchFiles(repoPath: string, branch: string, directory: string): Promise<string[]> {
-  const output = (await git(repoPath, ["ls-tree", "-r", "--name-only", branch, "--", directory])).stdout;
-  return output.split(/\r?\n/).filter(Boolean);
 }
 
 /** 可认领分支 = 远端全部分支, 只排除 main。分支名完全由用户决定, device/ 只是推荐前缀。 */
@@ -104,10 +95,6 @@ export async function stageAndCommit(repoPath: string, message: string): Promise
 export async function changedPaths(repoPath: string, ...args: string[]): Promise<string[]> {
   const output = (await git(repoPath, ["diff", "--name-only", ...args])).stdout;
   return output.split(/\r?\n/).filter(Boolean);
-}
-
-export async function statusPorcelain(repoPath: string): Promise<string> {
-  return (await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).stdout;
 }
 
 export async function aheadBehind(repoPath: string, branch: string): Promise<{ ahead: number; behind: number } | undefined> {
