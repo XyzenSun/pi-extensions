@@ -86,7 +86,7 @@ init 只建立身份：clone、建分支、写状态文件，不做任何数据�
 }
 ```
 
-include/exclude 使用 glob；隐藏文件默认不参与同步 (`.gitignore` 除外)，符号链接不跟随，exclude 优先。`special` 可为文件选择内置 `settings` adapter 或仓库内的用户 adapter 路径 (`"./my-adapter.js"`)。adapter 可导出 `transformToRepository`、`transformToLocal`、`validate`，缺省转换方向保持原字节。
+include/exclude 使用 glob；隐藏文件默认不参与同步 (`.gitignore` 除外)，符号链接不跟随，exclude 优先。`special` 可为文件选择内置 `settings` adapter 或仓库内的用户 adapter 路径 (`"./my-adapter.js"`)。adapter 导出 `transformToRepository`、`transformToLocal` 两个转换方向，缺省方向保持原字节；需要校验时在转换函数内直接抛错即可。
 
 内置 `settings` adapter 仅同步设备无关的白名单字段，合并或恢复回本机时保留本机 `trackingId`、`sessionDir` 等白名单外字段，并保留本机非便携包源。adapter 会维护 `npm:@xyzensun/pi-sync-pure` 包声明，确保本插件可持续加载。
 
