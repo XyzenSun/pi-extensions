@@ -10,15 +10,9 @@ export interface AdapterContext {
   filePath: string;
 }
 
-export interface AdapterValidationIssue {
-  message: string;
-  severity: "error" | "warning";
-}
-
 export interface FileAdapter {
   transformToRepository?(local: Buffer, context: AdapterContext): Buffer | Promise<Buffer>;
   transformToLocal?(repository: Buffer, local: Buffer, context: AdapterContext): Buffer | Promise<Buffer>;
-  validate?(content: Buffer, context: AdapterContext): AdapterValidationIssue[] | Promise<AdapterValidationIssue[]>;
 }
 
 export type AdapterSpec = "direct" | FileAdapter;
@@ -48,7 +42,7 @@ export async function resolveAdapter(
       const imported = await import(pathToFileURL(modulePath).href) as { default?: unknown } & Record<string, unknown>;
       const candidate = imported.default ?? imported;
       if (!isRecord(candidate)) throw new Error("adapter 默认导出必须是对象");
-      for (const functionName of ["transformToRepository", "transformToLocal", "validate"] as const) {
+      for (const functionName of ["transformToRepository", "transformToLocal"] as const) {
         if (candidate[functionName] !== undefined && typeof candidate[functionName] !== "function") {
           throw new Error(`adapter ${functionName} 必须是函数`);
         }
@@ -84,14 +78,6 @@ export async function transformToLocal(
   adapter: AdapterSpec,
 ): Promise<Buffer> {
   return adapter === "direct" ? repository : (await adapter.transformToLocal?.(repository, local, context)) ?? repository;
-}
-
-export async function validateWithAdapter(
-  content: Buffer,
-  context: AdapterContext,
-  adapter: AdapterSpec,
-): Promise<AdapterValidationIssue[]> {
-  return adapter === "direct" ? [] : (await adapter.validate?.(content, context)) ?? [];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

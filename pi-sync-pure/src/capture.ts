@@ -7,7 +7,6 @@ import {
   specialEntryFor,
   syncDirectory,
   transformToRepository,
-  validateWithAdapter,
   type FileAdapter,
 } from "./adapters.ts";
 import { isPathAllowed } from "./glob.ts";
@@ -48,9 +47,6 @@ export async function capture(
     const entry = specialEntryFor(config, filePath);
     const adapter = await resolveAdapter(repoPath, entry, adapterCache);
     const context = adapterContext(agentDir, repoPath, filePath);
-    const issues = await validateWithAdapter(localBytes, context, adapter);
-    const blockingIssue = issues.find((issue) => issue.severity === "error");
-    if (blockingIssue) throw new Error(`${filePath}: ${blockingIssue.message}`);
     const repositoryBytes = await transformToRepository(localBytes, context, adapter);
     const targetPath = join(syncRoot, filePath);
     await mkdir(dirname(targetPath), { recursive: true });
