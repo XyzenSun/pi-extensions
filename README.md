@@ -6,6 +6,7 @@ Xyzen 开发并开源的 [pi](https://pi.dev) 扩展插件合集。每个一级�
 
 | 插件 | 功能 | 安装 |
 |------|------|------|
+| [pi-userprompt](./pi-userprompt) | 自动将全局或项目 `USER.md` 作为请求级 user 消息携带, 对话压缩后保留原文 | `pi install npm:@xyzensun/pi-userprompt` |
 | [pi-notify](./pi-notify) | ntfy 推送通知：任务完成、等待输入或出错时推送到手机，结构化消息体，global / session / mute 三层控制，本地、VM、无头服务器均可用 | `pi install npm:@xyzensun/pi-notify` |
 | [pi-sync](./pi-sync) | 通过私有 Git 仓库在多台机器间同步 Pi 配置，基于适配器处理特殊文件，架构说明见其 `docs/design.md` | `pi install npm:@xyzensun/pi-sync` |
 | [pi-sync-pure](./pi-sync-pure) | 基于设备分支、force 覆盖与 merge 的轻量 Git 原语同步版本 | `pi install npm:@xyzensun/pi-sync-pure` |

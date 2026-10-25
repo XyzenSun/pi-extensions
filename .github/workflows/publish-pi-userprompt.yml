@@ -1,0 +1,41 @@
+# 沿用仓库 NPM_TOKEN 鉴权, 只在用户手动触发时发布.
+name: Publish pi-userprompt
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: pi-userprompt/package-lock.json
+
+      - name: Install dependencies
+        working-directory: pi-userprompt
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        working-directory: pi-userprompt
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: pi-userprompt
+        run: npm test
+
+      - name: Publish to npm
+        working-directory: pi-userprompt
+        run: npm publish --access public --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

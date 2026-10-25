@@ -1,0 +1,49 @@
+{
+  "name": "@xyzensun/pi-userprompt",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Keep USER.md preferences in request-local user messages across pi conversation compaction",
+  "keywords": [
+    "pi-package"
+  ],
+  "author": "xyzensun",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XyzenSun/pi-extensions.git",
+    "directory": "pi-userprompt"
+  },
+  "homepage": "https://github.com/XyzenSun/pi-extensions/tree/main/pi-userprompt#readme",
+  "bugs": {
+    "url": "https://github.com/XyzenSun/pi-extensions/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.ts",
+    "user-prompt.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
