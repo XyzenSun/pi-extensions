@@ -6,7 +6,8 @@
  *   /mctx new [补充指示]        蒸馏重置: 总结会话为四段式 kickoff prompt,
  *                              清空上下文进入新会话, prompt 预填编辑器草稿,
  *                              审查编辑后回车提交才进入上下文
- *   /mctx sink [--keep N]       工具结果下沉: 把确定用完的大块工具输出移出
+ *   /mctx sink [--keep N] [--minbytes N]
+ *                              工具结果下沉: 把确定用完的大块工具输出移出
  *                              发给模型的请求 (session 原文不动), 模型需要时
  *                              用 obs({ id }) 整条无损读回
  *   /mctx sink --undo           撤销本会话全部下沉
@@ -23,7 +24,7 @@ import { runSinkCommand } from "./src/sink-command.ts";
 import { getSunkIds, rebindSession } from "./src/sink-store.ts";
 import { projectSunkMessages } from "./src/sink-project.ts";
 
-const USAGE = "用法: /mctx new [补充指示] | /mctx sink [--keep N] | /mctx sink --undo";
+const USAGE = "用法: /mctx new [补充指示] | /mctx sink [--keep N] [--minbytes N] | /mctx sink --undo";
 
 export default function (pi: ExtensionAPI): void {
   dbg("init", "pi-mctx 加载", { debugEnabled: DEBUG_ENABLED, tmpBase: "pi-mctx" });

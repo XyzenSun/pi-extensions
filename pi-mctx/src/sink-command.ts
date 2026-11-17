@@ -17,27 +17,44 @@ import {
 
 interface SinkArgs {
   keep: number | undefined;
+  minBytes: number | undefined;
   undo: boolean;
 }
 
 type ParsedSinkArgs = SinkArgs | { error: string };
 
 function parseSinkArgs(raw: string): ParsedSinkArgs {
-  const result: SinkArgs = { keep: undefined, undo: false };
+  const result: SinkArgs = { keep: undefined, minBytes: undefined, undo: false };
   const tokens = raw.trim().split(/\s+/).filter(Boolean);
-  for (const token of tokens) {
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
     if (token === "--undo") {
       result.undo = true;
-    } else if (token.startsWith("--keep=")) {
-      const value = Number(token.slice("--keep=".length));
+      continue;
+    }
+
+    // 两个数值参数共用取值逻辑, 同时支持空格与等号形式。
+    const separatorIndex = token.indexOf("=");
+    const option = separatorIndex === -1 ? token : token.slice(0, separatorIndex);
+    if (option !== "--keep" && option !== "--minbytes") {
+      return { error: `未知参数: ${token}` };
+    }
+    const rawValue = separatorIndex === -1 ? tokens[++index] : token.slice(separatorIndex + 1);
+    if (rawValue === undefined || rawValue === "" || rawValue.startsWith("--")) {
+      return { error: `${option} 需要 N 值, 用法: ${option} N 或 ${option}=N` };
+    }
+
+    const value = Number(rawValue);
+    if (option === "--keep") {
       if (!Number.isInteger(value) || value < 0) {
-        return { error: `--keep 需要非负整数: ${token}` };
+        return { error: `--keep 需要非负整数: ${rawValue}` };
       }
       result.keep = value;
-    } else if (token === "--keep") {
-      return { error: "--keep 需要 N 值, 用法: --keep N 或 --keep=N" };
     } else {
-      return { error: `未知参数: ${token}` };
+      if (!Number.isInteger(value) || value <= 0) {
+        return { error: `--minbytes 需要正整数 (bytes): ${rawValue}` };
+      }
+      result.minBytes = value;
     }
   }
   return result;
@@ -71,7 +88,9 @@ export async function runSinkCommand(
   await ctx.waitForIdle();
 
   const sessionId = ctx.sessionManager.getSessionId();
-  dbg("sink", "命令触发", { rawArgs, parsed, sessionId, minBytes: config.sink.minBytes });
+  // 命令参数只覆盖本次筛选, 未指定时沿用配置加载后的值 (缺省为 2048 bytes)。
+  const minBytes = parsed.minBytes ?? config.sink.minBytes;
+  dbg("sink", "命令触发", { rawArgs, parsed, sessionId, minBytes });
 
   if (parsed.undo) {
     const removed = removeAllSunkFiles(sessionId);
@@ -99,7 +118,7 @@ export async function runSinkCommand(
     const text = extractResultText(message.content);
     if (text === null) continue;
     const bytes = Buffer.byteLength(text, "utf8");
-    if (bytes < config.sink.minBytes) continue;
+    if (bytes < minBytes) continue;
     candidates.push({ id: message.toolCallId, toolName: message.toolName, bytes, text });
   }
   dbg(

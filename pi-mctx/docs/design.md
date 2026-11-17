@@ -26,11 +26,13 @@ pi-mctx 是一个**纯手动**的上下文管理工具集, 提供两个互补操
 /mctx new [可选补充指示]     蒸馏重置: 总结会话 -> 清空上下文 -> 新会话草稿预填
 /mctx sink                  沉掉当前上下文里所有合格的工具结果
 /mctx sink --keep N         目标状态: 最近 N 条合格结果可见 (已沉的会被恢复), 其余下沉
+/mctx sink --minbytes N     本次使用 N bytes 作为合格结果阈值, 可与 --keep 组合
 /mctx sink --undo           撤销本会话所有下沉 (删文件 + 清集合)
 ```
 
 - `new` 的补充指示用于引导总结侧重点, 如 `/mctx new 重点保留数据库设计决策`
-- `sink` 的 `--keep N` 支持 `--keep N` 与 `--keep=N` 两种形式 (实现细节)
+- `sink` 的数值参数支持空格与等号两种形式: `--keep N` / `--keep=N`, `--minbytes N` / `--minbytes=N`
+- `--minbytes` 可选且要求正整数, 单位为 UTF-8 bytes; 优先级为本次命令参数 → 配置 `sink.minBytes` → 默认 `2048 bytes`, 不修改配置文件
 
 ## 3. 子系统一: sink (工具结果下沉)
 
@@ -121,7 +123,7 @@ pi-mctx 是一个**纯手动**的上下文管理工具集, 提供两个互补操
 
 **执行流程**:
 
-1. `ctx.waitForIdle()` 等待 agent 空闲 (保证 buildContextEntries 快照一致)
+1. 解析参数, 非法参数直接报错; `--minbytes` 仅覆盖本次筛选阈值, 未指定时沿用加载后的配置值。`ctx.waitForIdle()` 等待 agent 空闲 (保证 buildContextEntries 快照一致)
 2. 取 `ctx.sessionManager.buildContextEntries()` (compaction-aware: 只拿当前还在上下文里的消息, 已被压缩掉的不再处理)
 3. 逐条按 §3.6 判定"合格", 得到候选列表 (保持原始顺序)
 4. `--keep N`: 目标状态语义 —— 执行后保证「最近 N 条候选可见, 其余已沉」。保留尾部的已沉条目删文件 + 移出集合恢复全文, 使「先全沉再 --keep」与重复执行都得到正确且幂等的结果
@@ -137,7 +139,7 @@ pi-mctx 是一个**纯手动**的上下文管理工具集, 提供两个互补操
 ```
 message.role === "toolResult"
 且 message.content 全为 text 块 (纯文本结果)
-且 Buffer.byteLength(text) >= minBytes (默认 2048)
+且 Buffer.byteLength(text, "utf8") >= minBytes (命令 --minbytes 优先, 其次配置 sink.minBytes, 默认 2048)
 且 message.toolName !== "obs"        # 防止"读回来的内容又被沉"的套娃
 ```
 
@@ -323,7 +325,7 @@ system prompt 要点:
 
 | 字段 | 类型 | 默认 | 说明 |
 |------|------|------|------|
-| sink.minBytes | number | 2048 | 合格结果的最小字节数 |
+| sink.minBytes | number | 2048 | 合格结果的最小 UTF-8 字节数, 本次命令可用 --minbytes 临时覆盖 |
 | sink.placeholder | string | 见 §3.9 | 占位符模板, 必须包含 {id}; 未包含则回退默认 |
 
 new 子命令暂无配置项 (模板 v1 固定)。
@@ -514,6 +516,8 @@ pi-mctx/
 - 回读: obs({id}) 返回与写入内容逐字节相同; 未知 id 报错
 - 幂等: 连续两次 /mctx sink 不重复写、不报错
 - --keep N: 保留最近 N 条, 其余下沉; 先全沉再 --keep N 能正确恢复尾部 N 条 (目标状态幂等)
+- --minbytes N / --minbytes=N: 临时覆盖配置阈值, 不修改配置; 未指定时使用配置值, 配置缺失时兜底 2048 bytes
+- --minbytes: 缺值、零、负数、小数和非数值直接报错; 与 --keep 组合时按本次阈值筛选后保留尾部
 - --undo: 文件被删、集合清空、投影恢复全文 (钩子回到快路径)
 - 重启恢复: 模拟进程重启后 readdir 重建集合, 占位符仍生效
 - tmpdir 清理: 删除目录后 readdir 得空集, 全文恢复
